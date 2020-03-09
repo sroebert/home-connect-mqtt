@@ -1,0 +1,59 @@
+{
+  "name": "home-connect-mqtt",
+  "version": "1.0.0",
+  "description": "Home Connect to MQTT bridge",
+  "main": "dist",
+  "scripts": {
+    "dev": "nodemon -w src --exec \"babel-node src --presets es2015,stage-0\"",
+    "build": "babel src -s -D -d dist --presets es2015,stage-0",
+    "start": "node dist",
+    "prestart": "npm run -s build",
+    "test": "eslint src"
+  },
+  "eslintConfig": {
+    "extends": "eslint:recommended",
+    "parserOptions": {
+      "ecmaVersion": 9,
+      "sourceType": "module"
+    },
+    "env": {
+      "node": true,
+      "es6": true
+    },
+    "rules": {
+      "no-console": 0,
+      "no-unused-vars": 1
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developit/express-es6-rest-api.git"
+  },
+  "author": "Steven Roebert",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.19.2",
+    "axios-logger": "^2.3.1",
+    "body-parser": "^1.13.3",
+    "bottleneck": "^2.19.5",
+    "camel-case": "^4.1.1",
+    "compression": "^1.5.2",
+    "cors": "^2.7.1",
+    "eventsource": "^1.0.7",
+    "express": "^4.13.3",
+    "morgan": "^1.8.0",
+    "mqtt": "^3.0.0",
+    "node-persist": "^3.0.5",
+    "node-schedule": "^1.3.2",
+    "qs": "^6.9.1",
+    "resource-router-middleware": "^0.6.0"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.9.0",
+    "babel-core": "^6.9.0",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-preset-stage-0": "^6.5.0",
+    "eslint": "^3.1.1",
+    "nodemon": "^1.9.2"
+  }
+}

@@ -1,6 +1,6 @@
 # see hooks/build and hooks/.config
 ARG BASE_IMAGE_PREFIX
-FROM ${BASE_IMAGE_PREFIX}alpine:3.4
+FROM ${BASE_IMAGE_PREFIX}alpine:3.10
 
 # see hooks/post_checkout
 ARG ARCH

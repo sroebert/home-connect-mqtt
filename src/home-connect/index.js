@@ -214,7 +214,7 @@ export default class HomeConnectManager {
   // Commands
   // ===
 
-  _onApplianceCommand(appliance, command) {
+  async _onApplianceCommand(appliance, command) {
     for (const [key, value] of Object.entries(command)) {
       const entry = command_mapping[key]
       if (!entry) {
@@ -233,12 +233,19 @@ export default class HomeConnectManager {
         apiValue = valueEntry[appliance.type]
       }
 
-      this._apiManager.put(`homeappliances/${appliance.haId}/${entry.path}/${entry.key}`, {
-        data: {
-            key: entry.key,
-            value: apiValue
-        }
-      })
+      try {
+        await this._apiManager.put(`homeappliances/${appliance.haId}/${entry.path}/${entry.key}`, {
+          data: {
+              key: entry.key,
+              value: apiValue
+          }
+        })
+      } catch (err) {
+        console.log(`Failed to perform command ${key} for appliance ${appliance.haId}: ${err}`)
+
+        // Since the call failed, update the appliance, making sure we have up to date info in MQTT
+        this._forceUpdateAppliance(appliance.haId)
+      }
     }
   }
 

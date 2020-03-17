@@ -8,7 +8,7 @@ export default {
         "Oven": "BSH.Common.EnumType.PowerState.Standby",
         "Dishwasher": "BSH.Common.EnumType.PowerState.Off",
         "CoffeeMachine": "BSH.Common.EnumType.PowerState.Standby",
-        "Cooktop": "BSH.Common.EnumType.PowerState.Off",
+        "Hob": "BSH.Common.EnumType.PowerState.Off",
         "Hood": "BSH.Common.EnumType.PowerState.Off",
         "CleaningRobot": "BSH.Common.EnumType.PowerState.Standby",
         "CookProcessor": "BSH.Common.EnumType.PowerState.Standby",

@@ -158,16 +158,6 @@ export default class HomeConnectManager {
     return response.data.data.settings
   }
 
-  async _getApplianceActiveProgram(haId) {
-    const response = await this._apiManager.get(`homeappliances/${haId}/programs/active`)
-    return response.data.data
-  }
-
-  async _getApplianceSelectedProgram(haId) {
-    const response = await this._apiManager.get(`homeappliances/${haId}/programs/selected`)
-    return response.data.data
-  }
-
   async _listenForEvents() {
     this._stopListeningForEvents()
 
@@ -279,34 +269,35 @@ export default class HomeConnectManager {
       .catch(this._recoverStatus(409))
     appliance.settings = settings ? settings.reduce(reducer, {}) : null
 
-    let activeProgram = await this._getApplianceActiveProgram(appliance.haId)
-      .catch(this._recoverStatus([404, 409]))
-    if (activeProgram) {
-      let options = activeProgram.options || []
-      activeProgram = {
-        name: this._convertValue(activeProgram.key),
-        options: options.reduce(reducer, {})
-      }
-    }
-
-    let selectedProgram = await this._getApplianceSelectedProgram(appliance.haId)
-      .catch(this._recoverStatus([404, 409]))
-    if (selectedProgram) {
-      let options = selectedProgram.options || []
-      selectedProgram = {
-        name: this._convertValue(selectedProgram.key),
-        options: options.reduce(reducer, {})
-      }
-    }
-
     appliance.programs = {
-      active: activeProgram,
-      selected: selectedProgram,
+      active: await this._getApplianceProgram(appliance.haId, 'active'),
+      selected: await this._getApplianceProgram(appliance.haId, 'selected'),
     }
 
     appliance.events = {}
 
     return appliance
+  }
+
+  async _getApplianceProgram(haId, type) {
+    const reducer = (object, item) => {
+      let key = this._convertKey(item.key)
+      object[key] = this._convertValue(item.value)
+      return object
+    }
+
+    const response = await this._apiManager.get(`homeappliances/${haId}/programs/${type}`)
+      .catch(this._recoverStatus([404, 409], { data: { data: null } }))
+    let program = response.data.data
+    
+    if (program) {
+      let options = program.options || []
+      program = {
+        name: this._convertValue(program.key),
+        options: options.reduce(reducer, {})
+      }
+    }
+    return program
   }
 
   async _forceUpdateAppliance(haId) {
@@ -370,6 +361,9 @@ export default class HomeConnectManager {
         if (value) {
           appliance.programs.active = appliance.programs.active || {name: "unknown", options: {}}
           appliance.programs.active.name = value
+
+          // Update to get all the program details
+          this._forceUpdateAppliance(appliance.haId)
         } else {
           appliance.programs.active = null
         }
@@ -382,6 +376,9 @@ export default class HomeConnectManager {
         if (value) {
           appliance.programs.selected = appliance.programs.selected || {name: "unknown", options: {}}
           appliance.programs.selected.name = value
+
+          // Update to get all the program details
+          this._forceUpdateAppliance(appliance.haId)
         } else {
           appliance.programs.selected = null
         }

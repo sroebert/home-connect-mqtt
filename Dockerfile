@@ -1,32 +1,22 @@
-# see hooks/build and hooks/.config
+# See hooks/build and hooks/.config
 ARG BASE_IMAGE_PREFIX
-FROM ${BASE_IMAGE_PREFIX}alpine:3.10
+FROM ${BASE_IMAGE_PREFIX}node:12.10
 
-# see hooks/post_checkout
+# See hooks/post_checkout
 ARG ARCH
 COPY qemu-${ARCH}-static /usr/bin
 
-# File Author / Maintainer
-LABEL authors="Steven Roebert <steven@roebert.nl>"
+# Setup App
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm install
+COPY . .
 
-# Update & install required packages
-RUN apk add --update nodejs bash git
-
-# Install app dependencies
-COPY package.json /www/package.json
-RUN cd /www; npm install
-
-# Copy app source
-COPY . /www
-
-# Set work directory to /www
-WORKDIR /www
-
-# set your port
+# Set port and expose
 ENV PORT 8080
-
-# expose the port to outside world
+ENV DATA_DIR /data
+ENV CONFIG_FILE /data/config.json
 EXPOSE  8080
 
-# start command as per package.json
+# Start
 CMD ["npm", "start"]

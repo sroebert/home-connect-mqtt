@@ -6,39 +6,51 @@ import bodyParser from 'body-parser'
 import middleware from './middleware'
 import routes from './routes'
 import HomeConnectManager from './home-connect'
-import config from '../config/config.json'
+import fs from 'fs'
 
 let app = express()
 app.server = http.createServer(app)
-
-// logger
 app.use(morgan('dev'))
 
-// 3rd party middleware
-app.use(cors({
-	exposedHeaders: config.corsHeaders
-}))
+fs.readFile(process.env.CONFIG_FILE || './data/config.json', (err, data) => {
+	if (err) {
+		console.log(`Failed to load config json: ${err}`)
+		return
+	}
 
-app.use(bodyParser.json({
-	limit : config.bodyLimit
-}))
+	let config = null
+	try {
+		config = JSON.parse(data)
+	} catch (jsonErr) {
+		console.log(`Failed to parse config json: ${jsonErr}`)
+		return
+	}
 
-const manager = new HomeConnectManager({
-	dataStorageDir: config.dataStorageDir,
-	clientId: config.clientId,
-	clientSecret: config.clientSecret,
-	redirectUri: config.redirectUri,
-	mqttUrl: config.mqttUrl,
-	mqttUsername: config.mqttUsername,
-	mqttPassword: config.mqttPassword
+	app.use(cors({
+		exposedHeaders: config.corsHeaders
+	}))
+	
+	app.use(bodyParser.json({
+		limit : config.bodyLimit
+	}))
+	
+	const manager = new HomeConnectManager({
+		dataStorageDir: process.env.DATA_DIR || './data',
+		clientId: config.clientId,
+		clientSecret: config.clientSecret,
+		redirectUri: config.redirectUri,
+		mqttUrl: config.mqttUrl,
+		mqttUsername: config.mqttUsername,
+		mqttPassword: config.mqttPassword
+	})
+	manager.start()
+	
+	app.use(middleware({ config }))
+	app.use('/', routes({ config, manager }))
+	
+	app.server.listen(process.env.PORT || config.port, () => {
+		console.log(`Started on port ${app.server.address().port}`)
+	});
 })
-manager.start()
-
-app.use(middleware({ config }))
-app.use('/', routes({ config, manager }))
-
-app.server.listen(process.env.PORT || config.port, () => {
-	console.log(`Started on port ${app.server.address().port}`)
-});
 
 export default app

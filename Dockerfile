@@ -1,4 +1,10 @@
-FROM alpine:3.4
+# see hooks/build and hooks/.config
+ARG BASE_IMAGE_PREFIX
+FROM ${BASE_IMAGE_PREFIX}alpine:3.4
+
+# see hooks/post_checkout
+ARG ARCH
+COPY qemu-${ARCH}-static /usr/bin
 
 # File Author / Maintainer
 LABEL authors="Steven Roebert <steven@roebert.nl>"

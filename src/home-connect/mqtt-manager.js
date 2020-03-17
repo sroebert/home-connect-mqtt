@@ -194,8 +194,7 @@ export default class MQTTManager {
       const value = appliance.events[key]
       return {
         topic: `events/${key}`,
-        payload: this._convertPayload(value),
-        retain: value == 'present'
+        payload: value
       }
     }
   }

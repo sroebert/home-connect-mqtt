@@ -12,7 +12,7 @@ let app = express()
 app.server = http.createServer(app)
 app.use(morgan('dev'))
 
-fs.readFile(process.env.CONFIG_FILE || './data/config.json', (err, data) => {
+fs.readFile(process.env.CONFIG_FILE || 'data/config.json', (err, data) => {
 	if (err) {
 		console.log(`Failed to load config json: ${err}`)
 		return

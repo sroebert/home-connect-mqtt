@@ -168,22 +168,32 @@ export default class HomeConnectManager {
     const events = ['KEEP-ALIVE', 'STATUS', 'EVENT', 'NOTIFY', 'CONNECTED', 'DISCONNECTED']
     events.forEach(eventName => {
       this._eventSource.addEventListener(eventName, event => {
-        this._keepAliveJob.reschedule(keepAliveTime)
+        if (!this._keepAliveJob.reschedule(keepAliveTime)) {
+          this._scheduleKeepAlive(keepAliveTime)
+        }
         this._handleEvent(event)
       })
     })
 
-    this._eventSource.onerror = () => {
-      schedule.scheduleJob(Date.now() + 5 * 1000, () => {
-        this._monitorDevices()
-      })
+    this._eventSource.onerror = (err) => {
+      console.log(`Error in the event source: ${err}`)
+      this._stopListeningForEvents()
+      this._startMonitoringDevices()
+    }
+
+    this._scheduleKeepAlive(keepAliveTime)
+  }
+
+  _scheduleKeepAlive(keepAliveTime) {
+    if (this._keepAliveJob) {
+      this._keepAliveJob.cancel()
+      this._keepAliveJob = null
     }
 
     this._keepAliveJob = schedule.scheduleJob(Date.now() + keepAliveTime, () => {
-      if (this._eventSource) {
-        console.log('Failed to keep alive, retrying')
-        this._listenForEvents()
-      }
+      console.log('Failed to keep alive, retrying')
+      this._stopListeningForEvents()
+      this._startMonitoringDevices()
     })
   }
 
@@ -196,6 +206,8 @@ export default class HomeConnectManager {
       this._keepAliveJob.cancel()
       this._keepAliveJob = null
     }
+
+    this._eventSource.onerror = () => {}
     this._eventSource.close()
     this._eventSource = null
   }
@@ -309,7 +321,6 @@ export default class HomeConnectManager {
   }
 
   _handleEvent(event) {
-    console.log(event)
     switch (event.type) {
       case 'KEEP-ALIVE':
         break

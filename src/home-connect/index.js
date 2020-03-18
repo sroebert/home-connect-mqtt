@@ -244,10 +244,10 @@ export default class HomeConnectManager {
         })
       } catch (err) {
         console.log(`Failed to perform command ${key} for appliance ${appliance.haId}: ${err}`)
-
-        // Since the call failed, update the appliance, making sure we have up to date info in MQTT
-        this._forceUpdateAppliance(appliance.haId)
       }
+
+      // Update to make sure we have the latest state
+      this._forceUpdateAppliance(appliance.haId)
     }
   }
 

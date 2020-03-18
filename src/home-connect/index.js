@@ -242,12 +242,22 @@ export default class HomeConnectManager {
               value: apiValue
           }
         })
+
+        // Update locally
+        this._handleApplianceUpdateItems(appliance, [
+          {
+            key: entry.key,
+            value: apiValue,
+            uri: `/api/homeappliances/${appliance.haId}/${entry.path}/${entry.key}`
+          }
+        ])
+
       } catch (err) {
         console.log(`Failed to perform command ${key} for appliance ${appliance.haId}: ${err}`)
-      }
 
-      // Update to make sure we have the latest state
-      this._forceUpdateAppliance(appliance.haId)
+        // Since the call failed, update the appliance, making sure we have up to date info in MQTT
+        this._forceUpdateAppliance(appliance.haId)
+      }
     }
   }
 
@@ -355,10 +365,14 @@ export default class HomeConnectManager {
       return
     }
 
-    const uriPrefix = `/api/homeappliances/${data.haId}`
+    this._handleApplianceUpdateItems(appliance, data.items)
+  }
+
+  _handleApplianceUpdateItems(appliance, items) {
+    const uriPrefix = `/api/homeappliances/${appliance.haId}`
     let updates = new Set()
     
-    data.items.forEach(item => {
+    items.forEach(item => {
       const key = this._convertKey(item.key)
       const value = this._convertValue(item.value)
 
@@ -405,7 +419,7 @@ export default class HomeConnectManager {
       this._mqttManager.publishApplianceUpdate(appliance, [...updates])
     }
   }
-
+  
   _handleEventEvent(event)  {
     const data = JSON.parse(event.data)
     const appliance = this._appliances[data.haId]

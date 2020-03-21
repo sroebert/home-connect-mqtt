@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/developit/express-es6-rest-api.git"
+    "url": "git+https://github.com/sroebert/home-connect-mqtt.git"
   },
   "author": "Steven Roebert",
   "license": "MIT",
@@ -45,8 +45,7 @@
     "mqtt": "^3.0.0",
     "node-persist": "^3.0.5",
     "node-schedule": "^1.3.2",
-    "qs": "^6.9.1",
-    "resource-router-middleware": "^0.6.0"
+    "qs": "^6.9.1"
   },
   "devDependencies": {
     "babel-cli": "^6.9.0",

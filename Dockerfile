@@ -1,6 +1,6 @@
 # See hooks/build and hooks/.config
 ARG BASE_IMAGE_PREFIX
-FROM ${BASE_IMAGE_PREFIX}node:12.10
+FROM ${BASE_IMAGE_PREFIX}node:latest
 
 # See hooks/post_checkout
 ARG ARCH

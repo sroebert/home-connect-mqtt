@@ -4,8 +4,8 @@
   "description": "Home Connect to MQTT bridge",
   "main": "dist",
   "scripts": {
-    "dev": "nodemon -w src --exec \"babel-node src --presets es2015,stage-0\"",
-    "build": "babel src -s -D -d dist --presets es2015,stage-0",
+    "dev": "nodemon -w src --exec \"babel-node src\"",
+    "build": "babel src -s -D -d dist",
     "start": "node dist",
     "prestart": "npm run -s build",
     "test": "eslint src"
@@ -32,6 +32,7 @@
   "author": "Steven Roebert",
   "license": "MIT",
   "dependencies": {
+    "@babel/runtime": "^7.9.6",
     "axios": "^0.19.2",
     "axios-logger": "^2.3.1",
     "body-parser": "^1.13.3",
@@ -48,11 +49,11 @@
     "qs": "^6.9.1"
   },
   "devDependencies": {
-    "babel-cli": "^6.9.0",
-    "babel-core": "^6.9.0",
-    "babel-plugin-transform-runtime": "^6.23.0",
-    "babel-preset-es2015": "^6.9.0",
-    "babel-preset-stage-0": "^6.5.0",
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.9.6",
+    "@babel/node": "^7.8.7",
+    "@babel/plugin-transform-runtime": "^7.9.6",
+    "@babel/preset-env": "^7.9.6",
     "eslint": "^3.1.1",
     "nodemon": "^1.9.2"
   }

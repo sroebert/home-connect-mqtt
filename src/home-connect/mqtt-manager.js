@@ -24,7 +24,8 @@ export default class MQTTManager {
     this._connectPromise = new Promise((resolve) => {
       this._mqtt = mqtt.connect(config.url, {
         username: config.username,
-        password: config.password
+        password: config.password,
+        rejectUnauthorized: false
       })
       this._mqtt.on('connect', () => {
         resolve()

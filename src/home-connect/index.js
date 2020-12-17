@@ -16,13 +16,13 @@ import command_mapping from './command-mapping'
  */
 
 export default class HomeConnectManager {
-  
+
   // ===
   // Initialize
   // ===
 
   /**
-   * @param {HomeConnectManagerConfig} config 
+   * @param {HomeConnectManagerConfig} config
    */
   constructor(config) {
     this.config = config
@@ -125,7 +125,7 @@ export default class HomeConnectManager {
       console.log(`Failed to monitor devices: ${err}`)
 
       schedule.scheduleJob(Date.now() + 5 * 60 * 1000, () => {
-        this._monitorDevices()
+        this._startMonitoringDevices()
       })
     })
   }
@@ -311,7 +311,7 @@ export default class HomeConnectManager {
     const response = await this._apiManager.get(`homeappliances/${haId}/programs/${type}`)
       .catch(this._recoverStatus([404, 409], { data: { data: null } }))
     let program = response.data.data
-    
+
     if (program) {
       let options = program.options || []
       program = {
@@ -345,7 +345,7 @@ export default class HomeConnectManager {
         this._handleEventEvent(event)
         break
 
-      case 'CONNECTED': 
+      case 'CONNECTED':
       case 'DISCONNECTED': {
         this._forceUpdateAppliance(event.lastEventId).catch(() => {
           console.log(`Failed to update appliance: ${event.lastEventId}`)
@@ -371,7 +371,7 @@ export default class HomeConnectManager {
   _handleApplianceUpdateItems(appliance, items) {
     const uriPrefix = `/api/homeappliances/${appliance.haId}`
     let updates = new Set()
-    
+
     items.forEach(item => {
       const key = this._convertKey(item.key)
       const value = this._convertValue(item.value)
@@ -419,7 +419,7 @@ export default class HomeConnectManager {
       this._mqttManager.publishApplianceUpdate(appliance, [...updates])
     }
   }
-  
+
   _handleEventEvent(event)  {
     const data = JSON.parse(event.data)
     const appliance = this._appliances[data.haId]

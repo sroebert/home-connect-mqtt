@@ -1,10 +1,4 @@
-# See hooks/build and hooks/.config
-ARG BASE_IMAGE_PREFIX
-FROM ${BASE_IMAGE_PREFIX}node:latest
-
-# See hooks/post_checkout
-ARG ARCH
-COPY qemu-${ARCH}-static /usr/bin
+FROM node:13-alpine
 
 # Setup App
 WORKDIR /usr/src/app

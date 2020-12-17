@@ -81,13 +81,7 @@ export default class HomeConnectManager {
     }
 
     this._isRunning = true
-    this._retrieveDevices().catch(err => {
-      console.log(`Failed to retrieve devices: ${err}`)
-
-      schedule.scheduleJob(Date.now() + 5 * 60 * 1000, () => {
-        this._retrieveDevices()
-      })
-    })
+    this._startRetrievingDevices()
   }
 
   _recoverStatus(validStatus, value = null) {
@@ -103,6 +97,16 @@ export default class HomeConnectManager {
 
       throw err
     }
+  }
+
+  _startRetrievingDevices() {
+    this._retrieveDevices().catch(err => {
+      console.log(`Failed to retrieve devices: ${err}`)
+
+      schedule.scheduleJob(Date.now() + 5 * 60 * 1000, () => {
+        this._startRetrievingDevices()
+      })
+    })
   }
 
   async _retrieveDevices() {
@@ -163,7 +167,7 @@ export default class HomeConnectManager {
 
     this._eventSource = await this._apiManager.getEventSource('homeappliances/events')
 
-    const keepAliveTime = 60 * 1000
+    const keepAliveTime = 65 * 1000
 
     const events = ['KEEP-ALIVE', 'STATUS', 'EVENT', 'NOTIFY', 'CONNECTED', 'DISCONNECTED']
     events.forEach(eventName => {

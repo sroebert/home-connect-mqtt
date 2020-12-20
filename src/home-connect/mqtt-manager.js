@@ -1,4 +1,5 @@
 import mqtt from 'mqtt'
+import winston from 'winston'
 
 /**
  * @typedef {Object} MQTTManagerConfig
@@ -16,8 +17,10 @@ export default class MQTTManager {
   /**
    * @param {MQTTManagerConfig} config 
    */
-  constructor(config) {
+  constructor(config, logger = winston) {
     this.config = config
+    this.logger = logger
+
     this._topicPrefix = 'home-connect'
     this._subscribedAppliances = new Set()
 
@@ -32,7 +35,7 @@ export default class MQTTManager {
         this._subscribe()
       })
       this._mqtt.on('error', (err) => {
-        console.log(`mqtt error: ${err}`)
+        this.logger.error(`MQTT error occurred: ${err.message}`)
       })
     })
   }
@@ -112,7 +115,7 @@ export default class MQTTManager {
           break
 
         default:
-          console.log(`Unknown global command received: ${message}`)
+          this.logger.error(`Unknown global command received: ${message}`)
         } 
       } else if (topicParts.length == 2 && topicParts[1] == 'command') {
         const haId = topicParts[0]
@@ -156,7 +159,7 @@ export default class MQTTManager {
     try {
       json = JSON.parse(message)
     } catch (err) {
-      console.log(`Invalid appliance command received for ${appliance.haId}: ${message}`)
+      this.logger.error(`Invalid command received for ${appliance.name}: ${message}`)
       return
     }
 

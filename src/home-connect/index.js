@@ -3,6 +3,7 @@ import MQTTManager from './mqtt-manager'
 import schedule from 'node-schedule'
 import { camelCase } from 'camel-case'
 import command_mapping from './command-mapping'
+import winston from 'winston'
 
 /**
  * @typedef {Object} HomeConnectManagerConfig
@@ -24,8 +25,9 @@ export default class HomeConnectManager {
   /**
    * @param {HomeConnectManagerConfig} config
    */
-  constructor(config) {
+  constructor(config, logger = winston) {
     this.config = config
+    this.logger = logger
 
     this._isRunning = false
     this._apiManager = new APIManager({
@@ -33,12 +35,12 @@ export default class HomeConnectManager {
       clientId: config.clientId,
       clientSecret: config.clientSecret,
       redirectUri: config.redirectUri
-    })
+    }, logger)
     this._mqttManager = new MQTTManager({
       url: config.mqttUrl,
       username: config.mqttUsername,
       password: config.mqttPassword
-    })
+    }, logger)
     this._mqttManager.onApplianceCommand = (appliance, command) => {
       this._onApplianceCommand(appliance, command)
     }
@@ -66,11 +68,13 @@ export default class HomeConnectManager {
   // ===
 
   start() {
+    this.logger.info('Starting HomeConnectManager')
+
     this._apiManager.isAuthorized().then(isAuthorized => {
       if (isAuthorized) {
         this._run()
       } else {
-        console.log('Not authorized')
+        this.logger.error('Not authorized')
       }
     })
   }
@@ -81,7 +85,7 @@ export default class HomeConnectManager {
     }
 
     this._isRunning = true
-    this._startRetrievingDevices()
+    this._startRetrievingAppliances()
   }
 
   _recoverStatus(validStatus, value = null) {
@@ -99,17 +103,29 @@ export default class HomeConnectManager {
     }
   }
 
-  _startRetrievingDevices() {
-    this._retrieveDevices().catch(err => {
-      console.log(`Failed to retrieve devices: ${err}`)
+  _startRetrievingAppliances() {
+    this.logger.info('Retrieving appliances...')
 
-      schedule.scheduleJob(Date.now() + 5 * 60 * 1000, () => {
-        this._startRetrievingDevices()
+    this._retrieveAppliances()
+      .then(() => {
+        this.logger.info('Found appliances:')
+        Object.keys(this._appliances).forEach(id => {
+          this.logger.warn(`${this._appliances[id].name} (${id})`)
+        })
+
+        this._startMonitoringAppliances()
       })
-    })
+      .catch(err => {
+        this.logger.error(`Failed to retrieve appliances: ${err.message}`)
+
+        this.logger.info('Scheduling to retrieve appliances again in 30 seconds')
+        schedule.scheduleJob(Date.now() + 30 * 1000, () => {
+          this._startRetrievingAppliances()
+        })
+      })
   }
 
-  async _retrieveDevices() {
+  async _retrieveAppliances() {
     const appliances = await this._getAppliances()
     const appliancesWithState = await Promise.all(appliances.map(async(appliance) => {
       return await this._updateApplianceWithState(appliance)
@@ -121,20 +137,22 @@ export default class HomeConnectManager {
     })
 
     this._mqttManager.publishAppliances(this._appliances)
-    this._startMonitoringDevices()
   }
 
-  _startMonitoringDevices() {
-    this._monitorDevices().catch(err => {
-      console.log(`Failed to monitor devices: ${err}`)
+  _startMonitoringAppliances() {
+    this.logger.info('Monitoring appliances...')
 
-      schedule.scheduleJob(Date.now() + 5 * 60 * 1000, () => {
-        this._startMonitoringDevices()
+    this._monitorAppliances().catch(err => {
+      this.logger.error(`Failed to monitor appliances: ${err.message}`)
+
+      this.logger.info('Scheduling to monitor appliances again in 30 seconds')
+      schedule.scheduleJob(Date.now() + 30 * 1000, () => {
+        this._startMonitoringAppliances()
       })
     })
   }
 
-  async _monitorDevices() {
+  async _monitorAppliances() {
     await this._listenForEvents()
   }
 
@@ -167,22 +185,20 @@ export default class HomeConnectManager {
 
     this._eventSource = await this._apiManager.getEventSource('homeappliances/events')
 
-    const keepAliveTime = 65 * 1000
+    const keepAliveTime = 60 * 1000
+    this.keepAliveLogCount = 0
 
     const events = ['KEEP-ALIVE', 'STATUS', 'EVENT', 'NOTIFY', 'CONNECTED', 'DISCONNECTED']
     events.forEach(eventName => {
       this._eventSource.addEventListener(eventName, event => {
-        if (!this._keepAliveJob.reschedule(keepAliveTime)) {
-          this._scheduleKeepAlive(keepAliveTime)
-        }
+        this._scheduleKeepAlive(keepAliveTime)
         this._handleEvent(event)
       })
     })
 
     this._eventSource.onerror = (err) => {
-      console.log(`Error in the event source: ${err}`)
-      this._stopListeningForEvents()
-      this._startMonitoringDevices()
+      this.logger.error(`Error in the event source: ${err.message}`)
+      this._startMonitoringAppliances()
     }
 
     this._scheduleKeepAlive(keepAliveTime)
@@ -195,25 +211,22 @@ export default class HomeConnectManager {
     }
 
     this._keepAliveJob = schedule.scheduleJob(Date.now() + keepAliveTime, () => {
-      console.log('Failed to keep alive, retrying')
-      this._stopListeningForEvents()
-      this._startMonitoringDevices()
+      this.logger.error('Failed to keep event source alive, restarting...')
+      this._startMonitoringAppliances()
     })
   }
 
   _stopListeningForEvents() {
-    if (!this._eventSource) {
-      return
-    }
-
     if (this._keepAliveJob) {
       this._keepAliveJob.cancel()
       this._keepAliveJob = null
     }
 
-    this._eventSource.onerror = () => {}
-    this._eventSource.close()
-    this._eventSource = null
+    if (this._eventSource) {
+      this._eventSource.onerror = () => {}
+      this._eventSource.close()
+      this._eventSource = null
+    }
   }
 
   // ===
@@ -224,13 +237,13 @@ export default class HomeConnectManager {
     for (const [key, value] of Object.entries(command)) {
       const entry = command_mapping[key]
       if (!entry) {
-        console.log(`Received unknown command for appliance ${appliance.haId}: ${key}`)
+        this.logger.error(`Received unknown command for ${appliance.name}: ${key}`)
         continue
       }
 
       const valueEntry = entry.values[value]
       if (!valueEntry) {
-        console.log(`Received unknown value for appliance ${appliance.haId} and command ${key}: ${value}`)
+        this.logger.error(`Received unknown value for ${appliance.name} and command ${key}: ${value}`)
         continue
       }
 
@@ -257,7 +270,7 @@ export default class HomeConnectManager {
         ])
 
       } catch (err) {
-        console.log(`Failed to perform command ${key} for appliance ${appliance.haId}: ${err}`)
+        this.logger.error(`Failed to perform command ${key} for ${appliance.name}: ${err.message}`)
 
         // Since the call failed, update the appliance, making sure we have up to date info in MQTT
         this._forceUpdateAppliance(appliance.haId)
@@ -337,6 +350,13 @@ export default class HomeConnectManager {
   _handleEvent(event) {
     switch (event.type) {
       case 'KEEP-ALIVE':
+        this.keepAliveLogCount += 1
+        if (this.keepAliveLogCount >= 60 * 2) { // Only every two hours
+          this.logger.verbose('Received keep alive')
+          this.keepAliveLogCount = 0
+        } else {
+          this.logger.debug('Received keep alive')
+        }
         break
 
       case 'STATUS':
@@ -351,8 +371,11 @@ export default class HomeConnectManager {
 
       case 'CONNECTED':
       case 'DISCONNECTED': {
-        this._forceUpdateAppliance(event.lastEventId).catch(() => {
-          console.log(`Failed to update appliance: ${event.lastEventId}`)
+        this.logger.verbose(`Appliance ${event.lastEventId} ${event.type}, updating...`)
+        this._forceUpdateAppliance(event.lastEventId).then(() =>{
+          this.logger.verbose(`${event.lastEventId} updated.`)
+        }).catch(() => {
+          this.logger.error(`Failed to update appliance ${event.lastEventId} after ${event.type}`)
         })
         break
       }
@@ -420,7 +443,9 @@ export default class HomeConnectManager {
     })
 
     if (updates.size > 0) {
-      this._mqttManager.publishApplianceUpdate(appliance, [...updates])
+      const updateArray = [...updates]
+      this.logger.verbose(`${appliance.name} updated`, { 'updates': updateArray })
+      this._mqttManager.publishApplianceUpdate(appliance, updateArray)
     }
   }
 
@@ -438,6 +463,8 @@ export default class HomeConnectManager {
       appliance.events[key] = value
 
       updates.push(`events.${key}`)
+
+      this.logger.verbose(`${appliance.name} triggered event ${key}`)
     })
 
     if (data.items.length > 0) {

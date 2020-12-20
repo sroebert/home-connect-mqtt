@@ -5,7 +5,7 @@ import storage from 'node-persist'
 import https from 'https'
 import EventSource from 'eventsource'
 import Bottleneck from 'bottleneck'
-import * as AxiosLogger from 'axios-logger'
+import winston from 'winston'
 
 const API_DOMAIN = 'api.home-connect.com'
 // const API_DOMAIN = 'simulator.home-connect.com'
@@ -33,8 +33,9 @@ export default class APIManager {
   /**
    * @param {APIManagerConfig} config 
    */
-  constructor(config) {
+  constructor(config, logger = winston) {
     this.config = config
+    this.logger = logger
 
     this._limiter = new Bottleneck({
       maxConcurrent: 20,
@@ -63,7 +64,6 @@ export default class APIManager {
         return qs.stringify(data)
       }]
     })
-    this._setupLogging(instance)
     return instance
   }
 
@@ -79,17 +79,8 @@ export default class APIManager {
       },
       timeout: 10000
     })
-    this._setupLogging(instance)
     this._setupTokenHandling(instance)
     return instance
-  }
-
-  /**
-   * @param {AxiosInstance} axiosInstance
-   */
-  _setupLogging(axiosInstance) {
-    axiosInstance.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger)
-    axiosInstance.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger)
   }
 
   /**
@@ -103,6 +94,20 @@ export default class APIManager {
         return config
       },
       error => {
+        return Promise.reject(error)
+      }
+    )
+    axiosInstance.interceptors.response.use(
+      response => {
+        return response
+      },
+      error => {
+        if (error.response && error.response.status == 401) {
+          this.logger.error('Received 401 while communicating with API, refreshing access token')
+          this._waitForRefreshToken(this._token).catch(() => {
+            // Nothing to do
+          })
+        }
         return Promise.reject(error)
       }
     )
@@ -161,14 +166,23 @@ export default class APIManager {
   }
 
   async _refreshToken(token) {
-    const response = await this._limiter.wrap(this._authorizeAxios.post)('token', {
-      grant_type: 'refresh_token',
-      refresh_token: token.refresh_token,
-      client_secret: this.config.clientSecret
-    })
+    this.logger.warn('Refreshing access token')
 
-    await this._storeToken(response.data)
-    return response.data
+    try {
+      const response = await this._limiter.wrap(this._authorizeAxios.post)('token', {
+        grant_type: 'refresh_token',
+        refresh_token: token.refresh_token,
+        client_secret: this.config.clientSecret
+      })
+      this.logger.warn(`Refreshed access token, expires in ${token.expires_in} seconds`)
+
+      await this._storeToken(response.data)
+      return response.data
+
+    } catch (err) {
+      this.logger.error(`Failed to refresh access token: ${err.message}`)
+      throw err
+    }
   }
 
   async _storeToken(token) {

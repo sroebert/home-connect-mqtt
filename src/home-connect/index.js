@@ -211,8 +211,13 @@ export default class HomeConnectManager {
     }
 
     this._keepAliveJob = schedule.scheduleJob(Date.now() + keepAliveTime, () => {
-      this.logger.error('Failed to keep event source alive, restarting...')
-      this._startMonitoringAppliances()
+      this.logger.error('Failed to keep event source alive')
+      this._stopListeningForEvents()
+
+      this.logger.info('Scheduling to monitor appliances again in 15 seconds')
+      schedule.scheduleJob(Date.now() + 15 * 1000, () => {
+        this._startMonitoringAppliances()
+      })
     })
   }
 

@@ -22,7 +22,7 @@ const logger = winston.createLogger({
 			all: true
 		}),
 		winston.format.timestamp({
-			format: 'YYYY-MM-DD hh:mm:ss'
+			format: 'YYYY-MM-DD HH:mm:ss'
 		}),
 		winston.format.printf(({ level, message, timestamp, ...meta }) => {
 			var metaString = ""

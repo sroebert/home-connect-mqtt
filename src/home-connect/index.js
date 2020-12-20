@@ -253,6 +253,8 @@ export default class HomeConnectManager {
       }
 
       try {
+        this.logger.info(`Performing command ${key} for ${appliance.name}`, { value: apiValue })
+
         await this._apiManager.put(`homeappliances/${appliance.haId}/${entry.path}/${entry.key}`, {
           data: {
               key: entry.key,

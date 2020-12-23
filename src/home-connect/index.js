@@ -185,13 +185,19 @@ export default class HomeConnectManager {
 
     this._eventSource = await this._apiManager.getEventSource('homeappliances/events')
 
-    const keepAliveTime = 60 * 1000
+    const keepAliveTime = 60 * 1000 // Every minute (KEEP-ALIVE events should be every 55 seconds)
     this.keepAliveLogCount = 0
+
+    const restartTime = 60 * 60 * 2 * 1000 // Every two hours without events
 
     const events = ['KEEP-ALIVE', 'STATUS', 'EVENT', 'NOTIFY', 'CONNECTED', 'DISCONNECTED']
     events.forEach(eventName => {
       this._eventSource.addEventListener(eventName, event => {
         this._scheduleKeepAlive(keepAliveTime)
+        if (event.type != 'KEEP-ALIVE') {
+          this._scheduleRestart(restartTime)
+        }
+
         this._handleEvent(event)
       })
     })
@@ -202,6 +208,7 @@ export default class HomeConnectManager {
     }
 
     this._scheduleKeepAlive(keepAliveTime)
+    this._scheduleRestart(restartTime)
   }
 
   _scheduleKeepAlive(keepAliveTime) {
@@ -221,10 +228,35 @@ export default class HomeConnectManager {
     })
   }
 
+  _scheduleRestart(restartTime) {
+    // Unfortunately this is needed with the Home Connect event stream
+    // KEEP-ALIVE events are still send, but no other events are received.
+
+    if (this._restartJob) {
+      this._restartJob.cancel()
+      this._restartJob = null
+    }
+
+    this._restartJob = schedule.scheduleJob(Date.now() + restartTime, () => {
+      this.logger.error('No events for a long time, restarting to make sure everything stays working.')
+      this._stopListeningForEvents()
+
+      this.logger.info('Scheduling to monitor appliances again in 2 seconds')
+      schedule.scheduleJob(Date.now() + 2 * 1000, () => {
+        this._startMonitoringAppliances()
+      })
+    })
+  }
+
   _stopListeningForEvents() {
     if (this._keepAliveJob) {
       this._keepAliveJob.cancel()
       this._keepAliveJob = null
+    }
+
+    if (this._restartJob) {
+      this._restartJob.cancel()
+      this._restartJob = null
     }
 
     if (this._eventSource) {

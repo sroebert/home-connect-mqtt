@@ -51,7 +51,7 @@ export default class HomeConnectManager {
   // ===
 
   async isAuthorized() {
-    return this._apiManager.isAuthorized()
+    return await this._apiManager.isAuthorized()
   }
 
   createAuthorizationUrl() {
@@ -70,7 +70,7 @@ export default class HomeConnectManager {
   start() {
     this.logger.info('Starting HomeConnectManager')
 
-    this._apiManager.isAuthorized().then(isAuthorized => {
+    this.isAuthorized().then(isAuthorized => {
       if (isAuthorized) {
         this._run()
       } else {
@@ -89,7 +89,7 @@ export default class HomeConnectManager {
   }
 
   _recoverStatus(validStatus, value = null) {
-    return async(err) => {
+    return (err) => {
       if (!err.response) {
         throw err
       }
@@ -309,7 +309,7 @@ export default class HomeConnectManager {
         ])
 
       } catch (err) {
-        this.logger.error(`Failed to perform command ${key} for ${appliance.name}: ${err.message}`)
+        this.logger.error(`Failed to perform command ${key} for ${appliance.name} (${err.message}), updating...`)
 
         // Since the call failed, update the appliance, making sure we have up to date info in MQTT
         this._forceUpdateAppliance(appliance.haId)
@@ -378,12 +378,29 @@ export default class HomeConnectManager {
     return program
   }
 
-  async _forceUpdateAppliance(haId) {
+  _forceUpdateAppliance(haId, reason) {
+    const appliance = this._appliances[haId]
+    if (!appliance) {
+      this.logger.error(`Cannot update unknown applicance ${haId}`)
+      return
+    }
+
+    this._forceUpdateApplianceAsync(haId)
+      .then(() =>{
+        this.logger.verbose(`${appliance.name} updated.`)
+      })
+      .catch((err) => {
+        this.logger.error(`Failed to update ${appliance.name}: ${err.message}`)
+      })
+  }
+
+  async _forceUpdateApplianceAsync(haId) {
     let appliance = await this._getAppliance(haId)
     appliance = await this._updateApplianceWithState(appliance)
 
     this._appliances[haId] = appliance
     this._mqttManager.publishAppliance(appliance)
+    return appliance
   }
 
   _handleEvent(event) {
@@ -411,11 +428,7 @@ export default class HomeConnectManager {
       case 'CONNECTED':
       case 'DISCONNECTED': {
         this.logger.verbose(`Appliance ${event.lastEventId} ${event.type}, updating...`)
-        this._forceUpdateAppliance(event.lastEventId).then(() =>{
-          this.logger.verbose(`${event.lastEventId} updated.`)
-        }).catch(() => {
-          this.logger.error(`Failed to update appliance ${event.lastEventId} after ${event.type}`)
-        })
+        this._forceUpdateAppliance(event.lastEventId)
         break
       }
 
@@ -454,6 +467,7 @@ export default class HomeConnectManager {
           appliance.programs.active.name = value
 
           // Update to get all the program details
+          this.logger.verbose(`${appliance.name} active program changed, updating...`)
           this._forceUpdateAppliance(appliance.haId)
         } else {
           appliance.programs.active = null
@@ -469,6 +483,7 @@ export default class HomeConnectManager {
           appliance.programs.selected.name = value
 
           // Update to get all the program details
+          this.logger.info(`${appliance.name} selected program changed, updating...`)
           this._forceUpdateAppliance(appliance.haId)
         } else {
           appliance.programs.selected = null

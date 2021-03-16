@@ -117,6 +117,9 @@ export default class HomeConnectManager {
       })
       .catch(err => {
         this.logger.error(`Failed to retrieve appliances: ${err.message}`)
+        if (err.response && err.response.status == 429) {
+          this.logger.error(`Can retry again in : ${err.response.headers['Retry-After']}`)
+        }
 
         this.logger.info('Scheduling to retrieve appliances again in 30 seconds')
         schedule.scheduleJob(Date.now() + 30 * 1000, () => {
@@ -144,6 +147,9 @@ export default class HomeConnectManager {
 
     this._monitorAppliances().catch(err => {
       this.logger.error(`Failed to monitor appliances: ${err.message}`)
+      if (err.response && err.response.status == 429) {
+        this.logger.error(`Can retry again in : ${err.response.headers['Retry-After']}`)
+      }
 
       this.logger.info('Scheduling to monitor appliances again in 30 seconds')
       schedule.scheduleJob(Date.now() + 30 * 1000, () => {
@@ -391,6 +397,9 @@ export default class HomeConnectManager {
       })
       .catch((err) => {
         this.logger.error(`Failed to update ${appliance.name}: ${err.message}`)
+        if (err.response && err.response.status == 429) {
+          this.logger.error(`Can retry again in : ${err.response.headers['Retry-After']}`)
+        }
       })
   }
 

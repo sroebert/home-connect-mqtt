@@ -36,6 +36,11 @@ export default class APIManager {
     this.config = config
     this.logger = logger
 
+    this._httpsAgent = new https.Agent({
+      keepAlive: true,
+      maxSockets: 1,
+      timeout: 15000
+    })
     this._authorizeAxios = this._createAuthorizeAxios()
     this._apiAxios = this._createAPIAxios()
   }
@@ -45,10 +50,7 @@ export default class APIManager {
    */
   _createAuthorizeAxios() {
     const instance = axios.create({
-      httpsAgent: new https.Agent({
-        keepAlive: true,
-        maxSockets: Infinity,
-      }),
+      httpsAgent: this._httpsAgent,
       baseURL:  `https://${API_DOMAIN}/security/oauth/`,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -66,10 +68,7 @@ export default class APIManager {
    */
   _createAPIAxios() {
     const instance = axios.create({
-      httpsAgent: new https.Agent({
-        keepAlive: true,
-        maxSockets: Infinity,
-      }),
+      httpsAgent: this._httpsAgent,
       baseURL:  `https://${API_DOMAIN}/api/`,
       headers: {
         'Content-Type': 'application/json',

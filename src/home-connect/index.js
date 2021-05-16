@@ -130,9 +130,13 @@ export default class HomeConnectManager {
 
   async _retrieveAppliances() {
     const appliances = await this._getAppliances()
-    const appliancesWithState = await Promise.all(appliances.map(async(appliance) => {
-      return await this._updateApplianceWithState(appliance)
-    }))
+    this.logger.info(`Retrieving ${appliances.length} appliances...`)
+
+    let appliancesWithState = []
+    for (var appliance of appliances) {
+      const applianceWithState = await this._updateApplianceWithState(appliance)
+      appliancesWithState.push(applianceWithState)
+    }
 
     this._appliances = {}
     appliancesWithState.forEach(appliance => {
@@ -345,20 +349,32 @@ export default class HomeConnectManager {
       return object
     }
 
-    let status = await this._getApplianceStatus(appliance.haId)
-      .catch(this._recoverStatus(409))
-    appliance.status = status ? status.reduce(reducer, {}) : null
+    this.logger.info(`Retrieving ${appliance.name}...`)
 
-    let settings = await this._getApplianceSettings(appliance.haId)
-      .catch(this._recoverStatus(409))
-    appliance.settings = settings ? settings.reduce(reducer, {}) : null
+    if (appliance.connected) {
+      let status = await this._getApplianceStatus(appliance.haId)
+        .catch(this._recoverStatus(409))
+      appliance.status = status ? status.reduce(reducer, {}) : null
 
-    appliance.programs = {
-      active: await this._getApplianceProgram(appliance.haId, 'active'),
-      selected: await this._getApplianceProgram(appliance.haId, 'selected'),
+      let settings = await this._getApplianceSettings(appliance.haId)
+        .catch(this._recoverStatus(409))
+      appliance.settings = settings ? settings.reduce(reducer, {}) : null
+
+      appliance.programs = {
+        active: await this._getApplianceProgram(appliance.haId, 'active'),
+        selected: await this._getApplianceProgram(appliance.haId, 'selected'),
+      }
+
+      appliance.events = {}
+    } else {
+      appliance.status = null
+      appliance.settings = null
+      appliance.programs = {
+        active: null,
+        selected: null
+      }
+      appliance.events = {}
     }
-
-    appliance.events = {}
 
     return appliance
   }

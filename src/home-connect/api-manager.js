@@ -4,7 +4,6 @@ import { URL } from 'url'
 import storage from 'node-persist'
 import https from 'https'
 import EventSource from 'eventsource'
-import Bottleneck from 'bottleneck'
 import winston from 'winston'
 
 const API_DOMAIN = 'api.home-connect.com'
@@ -37,14 +36,6 @@ export default class APIManager {
     this.config = config
     this.logger = logger
 
-    this._limiter = new Bottleneck({
-      maxConcurrent: 20,
-      minTime: 100,
-      reservoir: 50,
-      reservoirRefreshAmount: 50,
-      reservoirRefreshInterval: 60 * 1000
-    })
-
     this._authorizeAxios = this._createAuthorizeAxios()
     this._apiAxios = this._createAPIAxios()
   }
@@ -54,7 +45,10 @@ export default class APIManager {
    */
   _createAuthorizeAxios() {
     const instance = axios.create({
-      httpsAgent: new https.Agent({ keepAlive: true }),
+      httpsAgent: new https.Agent({
+        keepAlive: true,
+        maxSockets: Infinity,
+      }),
       baseURL:  `https://${API_DOMAIN}/security/oauth/`,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -72,7 +66,10 @@ export default class APIManager {
    */
   _createAPIAxios() {
     const instance = axios.create({
-      httpsAgent: new https.Agent({ keepAlive: true }),
+      httpsAgent: new https.Agent({
+        keepAlive: true,
+        maxSockets: Infinity,
+      }),
       baseURL:  `https://${API_DOMAIN}/api/`,
       headers: {
         'Content-Type': 'application/json',
@@ -169,7 +166,7 @@ export default class APIManager {
     this.logger.warn('Refreshing access token')
 
     try {
-      const response = await this._limiter.wrap(this._authorizeAxios.post)('token', {
+      const response = await this._authorizeAxios.post('token', {
         grant_type: 'refresh_token',
         refresh_token: token.refresh_token,
         client_secret: this.config.clientSecret
@@ -223,7 +220,7 @@ export default class APIManager {
       throw new Error('Missing authorization code')
     }
 
-    const response = await this._limiter.wrap(this._authorizeAxios.post)('token', {
+    const response = await this._authorizeAxios.post('token', {
       grant_type: 'authorization_code',
       code: code,
       client_id: this.config.clientId,
@@ -243,7 +240,7 @@ export default class APIManager {
    * @returns {Promise<AxiosResponse>}
    */
   async get(path) {
-    return await this._limiter.wrap(this._apiAxios.get)(path)
+    return await this._apiAxios.get(path)
   }
 
   /**
@@ -252,7 +249,7 @@ export default class APIManager {
    * @returns {Promise<AxiosResponse>}
    */
   async put(path, data = null) {
-    return await this._limiter.wrap(this._apiAxios.put)(path, data)
+    return await this._apiAxios.put(path, data)
   }
 
   /**
@@ -260,7 +257,7 @@ export default class APIManager {
    * @returns {Promise<AxiosResponse>}
    */
   async delete(path) {
-    return await this._limiter.wrap(this._apiAxios.delete)(path)
+    return await this._apiAxios.delete(path)
   }
 
   /**

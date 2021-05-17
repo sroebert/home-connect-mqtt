@@ -288,34 +288,28 @@ export default class HomeConnectManager {
         continue
       }
 
-      const valueEntry = entry.values[value]
-      if (!valueEntry) {
-        this.logger.error(`Received unknown value for ${appliance.name} and command ${key}: ${value}`)
+      if (!entry.isSupported(appliance, value)) {
+        this.logger.error(`Received unsupported command for ${appliance.name}: ${key}`)
         continue
       }
 
-      let apiValue = valueEntry
-      if (valueEntry.constructor == Object) {
-        apiValue = valueEntry[appliance.type]
+      if (!entry.isValidValue(appliance, value)) {
+        this.logger.error(`Received invalid value for ${appliance.name} and command ${key}: ${value}`)
+        continue
       }
 
       try {
-        this.logger.info(`Performing command ${key} for ${appliance.name}`, { value: apiValue })
+        const data = entry.data(appliance, value)
 
-        await this._apiManager.put(`homeappliances/${appliance.haId}/${entry.path}/${entry.key}`, {
-          data: {
-              key: entry.key,
-              value: apiValue
-          }
+        this.logger.info(`Performing command ${key} for ${appliance.name}: ${value}`)
+        await this._apiManager.put(`homeappliances/${appliance.haId}/${entry.path}`, {
+          data: data
         })
 
         // Update locally
+        const event = entry.event(appliance, value)
         this._handleApplianceUpdateItems(appliance, [
-          {
-            key: entry.key,
-            value: apiValue,
-            uri: `/api/homeappliances/${appliance.haId}/${entry.path}/${entry.key}`
-          }
+          event
         ])
 
       } catch (err) {

@@ -207,6 +207,7 @@ export default class APIManager {
     authorizeUrl.searchParams.set('client_id', this.config.clientId)
     authorizeUrl.searchParams.set('redirect_uri', this.config.redirectUri)
     authorizeUrl.searchParams.set('response_type', 'code')
+    authorizeUrl.searchParams.set('scope', 'IdentifyAppliance Monitor Control Settings')
     return authorizeUrl
   }
 

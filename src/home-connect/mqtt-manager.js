@@ -128,7 +128,7 @@ export default class MQTTManager {
       }
     })
 
-    this._mqtt.subscribe(`${this._topicPrefix}/command`, { qos: 2 })
+    this._mqtt.subscribe(`${this._topicPrefix}/command`)
     this._subscribeForAppliances()
   }
 
@@ -141,7 +141,7 @@ export default class MQTTManager {
     for (const [, appliance] of Object.entries(this._appliances)) {
       if (!this._subscribedAppliances.has(appliance.haId)) {
         this._subscribedAppliances.add(appliance.haId)
-        this._mqtt.subscribe(`${this._topicPrefix}/${appliance.haId}/command`, { qos: 2 })
+        this._mqtt.subscribe(`${this._topicPrefix}/${appliance.haId}/command`)
       }
     }
   }
@@ -210,10 +210,7 @@ export default class MQTTManager {
   _publishMessages(appliance, messages) {
     const topicPrefix = `${this._topicPrefix}/${appliance.haId}`
     messages.forEach(message => {
-      this._mqtt.publish(`${topicPrefix}/${message.topic}`, message.payload, {
-        qos: 2,
-        retain: message.retain
-      })
+      this._mqtt.publish(`${topicPrefix}/${message.topic}`, message.payload)
     })
   }
 }

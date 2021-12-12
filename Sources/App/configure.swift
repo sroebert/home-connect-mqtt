@@ -6,8 +6,20 @@ import Vapor
 public func configure(_ app: Application) throws {
     
     // HTTP
+    
     app.http.server.configuration.requestDecompression = .enabled
     app.http.server.configuration.responseCompression = .enabled
+    
+    // JSON
+    
+    ContentConfiguration.global.use(
+        decoder: JSONDecoder.custom(dates: .iso8601),
+        for: HTTPMediaType(
+            type: "application",
+            subType: "vnd.bsh.sdk.v1+json",
+            parameters: ["charset": "utf-8"]
+        )
+    )
     
     // Database
     
@@ -37,4 +49,8 @@ public func configure(_ app: Application) throws {
             redirectURL: URI(string: redirectURL)
         )
     }
+    
+    // Home Connect
+    
+    app.lifecycle.use(HomeConnectManager())
 }

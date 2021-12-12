@@ -3,19 +3,38 @@ import FluentSQLiteDriver
 import Leaf
 import Vapor
 
-// configures your application
 public func configure(_ app: Application) throws {
-    // uncomment to serve files from /Public folder
-    // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+    
+    // HTTP
+    app.http.server.configuration.requestDecompression = .enabled
+    app.http.server.configuration.responseCompression = .enabled
+    
+    // Database
+    
+    let dbPath = "\(app.directory.workingDirectory)Data"
+    try FileManager.default.createDirectory(atPath: dbPath, withIntermediateDirectories: true)
+    app.databases.use(.sqlite(.file("\(dbPath)/db.sqlite")), as: .sqlite)
+    
+    app.migrations.add(CreateRefreshToken())
+    try app.autoMigrate().wait()
 
-    app.databases.use(.sqlite(.file("db.sqlite")), as: .sqlite)
-
-    app.migrations.add(CreateTodo())
-
+    // Views
+    
     app.views.use(.leaf)
 
+    // Routes
     
-
-    // register routes
     try routes(app)
+    
+    // Client
+    
+    if let id = Environment.get("HOME_CONNECT_CLIENT_ID"),
+       let secret = Environment.get("HOME_CONNECT_CLIENT_SECRET"),
+       let redirectURL = Environment.get("HOME_CONNECT_REDIRECT_URL") {
+        app.homeConnectClient = .init(
+            id: id,
+            secret: secret,
+            redirectURL: URI(string: redirectURL)
+        )
+    }
 }

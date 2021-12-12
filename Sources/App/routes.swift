@@ -2,13 +2,10 @@ import Fluent
 import Vapor
 
 func routes(_ app: Application) throws {
-    app.get { req in
-        return req.view.render("index", ["title": "Hello Vapor!"])
+    app.get { _ in
+        HTTPStatus.noContent
     }
 
-    app.get("hello") { req -> String in
-        return "Hello, world!"
-    }
-
-    try app.register(collection: TodoController())
+    try app.grouped("home-connect")
+        .register(collection: OAuthController())
 }

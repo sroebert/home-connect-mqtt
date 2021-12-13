@@ -1,5 +1,6 @@
 import Vapor
 import Fluent
+import AsyncHTTPClient
 
 struct HomeConnectAPI {
     
@@ -7,20 +8,20 @@ struct HomeConnectAPI {
     
     private static let baseURL = "https://api.home-connect.com/api/"
     
+    private let application: Application
     private let tokenAPI: HomeConnectTokenAPI
     private let client: Client
-    private let db: Database
     
     // MARK: - Lifecycle
     
     init(
+        application: Application,
         tokenAPI: HomeConnectTokenAPI,
-        client: Client,
-        database: Database
+        client: Client
     ) {
+        self.application = application
         self.tokenAPI = tokenAPI
         self.client = client
-        self.db = database
     }
     
     // MARK: - Utils
@@ -39,43 +40,131 @@ struct HomeConnectAPI {
         return request
     }
     
+    private func `get`<Result: Content>(_ path: String, at keyPath: CodingKeyRepresentable...) async throws -> Result {
+        let request = try await request(.GET, path)
+        
+        let response: ClientResponse
+        do {
+            response = try await client.send(request)
+        } catch {
+            throw APIError.connectionError(error)
+        }
+        
+        guard response.status == .ok else {
+            throw APIError.apiError(response.status)
+        }
+        
+        return try response.content.get(Result.self, at: keyPath)
+    }
+    
     // MARK: - API
     
     func getAppliances() async throws -> [HomeAppliance] {
-        let request = try await request(.GET, "homeappliances")
-        let response = try await client.send(request)
-        return try response.content.get([HomeAppliance].self, at: "data", "homeappliances")
+        try await get("homeappliances", at: "data", "homeappliances")
     }
     
     func getAppliance(withId applianceId: String) async throws -> HomeAppliance {
-        let request = try await request(.GET, "homeappliances/\(applianceId)")
-        let response = try await client.send(request)
-        return try response.content.get(HomeAppliance.self, at: "data")
+        try await get("homeappliances/\(applianceId)", at: "data", "homeappliances")
     }
     
-    func getStatus(forApplianceWithId applianceId: String) async throws -> [String: JSON] {
-        let request = try await request(.GET, "homeappliances/\(applianceId)/status")
-        let response = try await client.send(request)
-        
-        let statusKeyValues = try response.content.get([HomeApplianceKeyValue].self, at: "data", "status")
-        return statusKeyValues.parsedDictionary
+    func getStatus(forApplianceWithId applianceId: String) async throws -> [String: JSON]? {
+        try await getKeyValues(forApplianceWithId: applianceId, type: "status")
     }
     
-    func getSettings(forApplianceWithId applianceId: String) async throws -> [String: JSON] {
-        let request = try await request(.GET, "homeappliances/\(applianceId)/settings")
-        let response = try await client.send(request)
-        
-        let settingsKeyValues = try response.content.get([HomeApplianceKeyValue].self, at: "data", "settings")
-        return settingsKeyValues.parsedDictionary
+    func getSettings(forApplianceWithId applianceId: String) async throws -> [String: JSON]? {
+        try await getKeyValues(forApplianceWithId: applianceId, type: "settings")
+    }
+    
+    private func getKeyValues(forApplianceWithId applianceId: String, type: String) async throws -> [String: JSON]? {
+        do {
+            let keyValues: [HomeApplianceKeyValue] = try await get(
+                "homeappliances/\(applianceId)/\(type)",
+                at: "data", type
+            )
+            return keyValues.parsedDictionary
+        } catch APIError.apiError(.conflict) {
+            return nil
+        } catch {
+            throw error
+        }
+    }
+    
+    func getActiveProgram(forApplianceWithId applianceId: String) async throws -> HomeAppliance.Program? {
+        try await getProgram(forApplianceWithId: applianceId, type: "active")
+    }
+    
+    func getSelectedProgram(forApplianceWithId applianceId: String) async throws -> HomeAppliance.Program? {
+        try await getProgram(forApplianceWithId: applianceId, type: "selected")
+    }
+    
+    private func getProgram(forApplianceWithId applianceId: String, type: String) async throws -> HomeAppliance.Program? {
+        do {
+            let programResponse: HomeAppliance.Program.Response = try await get(
+                "homeappliances/\(applianceId)/programs/\(type)",
+                at: "data"
+            )
+            return programResponse.parsedProgram
+        } catch APIError.apiError(.notFound),
+                APIError.apiError(.conflict) {
+            return nil
+        } catch {
+            throw error
+        }
+    }
+    
+    // MARK: - Events
+    
+    var events: AsyncThrowingStream<HomeApplianceEvent, Error> {
+        .init { continuation in
+            Task {
+                do {
+                    let request = try await request(.GET, "homeappliances/events")
+                    let ahcRequest = try HTTPClient.Request(
+                        url: URL(string: request.url.string)!,
+                        method: request.method,
+                        headers: request.headers,
+                        body: nil
+                    )
+                    
+                    let task = application.http.client.shared.execute(
+                        request: ahcRequest,
+                        delegate: EventSourceDelegate(timeout: .seconds(60)) {
+                            print($0)
+//                            continuation.yield($0)
+                        },
+                        logger: application.logger
+                    )
+                    
+                    task.futureResult.whenComplete { result in
+                        switch result {
+                        case .success:
+                            continuation.finish()
+                            
+                        case .failure(let error):
+                            guard (error as? HTTPClientError) != .cancelled else {
+                                return
+                            }
+                            continuation.finish(throwing: error)
+                        }
+                    }
+                    
+                    continuation.onTermination = { @Sendable _ in
+                        task.cancel()
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 }
 
 extension Application {
     var homeConnectAPI: HomeConnectAPI {
         return HomeConnectAPI(
+            application: self,
             tokenAPI: homeConnectTokenAPI,
-            client: client,
-            database: db
+            client: client
         )
     }
 }

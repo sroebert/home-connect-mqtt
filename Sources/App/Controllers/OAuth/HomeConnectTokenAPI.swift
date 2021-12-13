@@ -71,7 +71,7 @@ struct HomeConnectTokenAPI {
     
     private func refreshToken() async throws -> AccessToken {
         guard let refreshToken = try await RefreshToken.query(on: db).first() else {
-            throw Abort(.unauthorized, reason: "Missing refresh token")
+            throw APIError.notAuthorized
         }
         
         let client = application.homeConnectClient
@@ -84,8 +84,17 @@ struct HomeConnectTokenAPI {
     
     @discardableResult
     private func getToken(for content: GrantTokenContent) async throws -> AccessToken {
-        let response = try await client.post(url(forPath: "token")) { request in
-            try request.content.encode(content, as: .urlEncodedForm)
+        let response: ClientResponse
+        do {
+            response = try await client.post(url(forPath: "token")) { request in
+                try request.content.encode(content, as: .urlEncodedForm)
+            }
+        } catch {
+            throw APIError.connectionError(error)
+        }
+        
+        guard response.status == .ok else {
+            throw APIError.apiError(response.status)
         }
         
         let token = try response.content.decode(Token.self)

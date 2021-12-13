@@ -6,8 +6,12 @@ final class HomeConnectManager: LifecycleHandler {
     
     private struct ApplianceEntry {
         var appliance: HomeAppliance
+        
         var status: [String: JSON]?
         var settings: [String: JSON]?
+        
+        var activeProgram: HomeAppliance.Program?
+        var selectedProgram: HomeAppliance.Program?
     }
     
     // MARK: - Private Vars
@@ -26,14 +30,7 @@ final class HomeConnectManager: LifecycleHandler {
     func didBoot(_ application: Application) throws {
         task = Task {
             while !Task.isCancelled {
-                do {
-                    try await run()
-                } catch {
-                    application.logger.error("Error while running", metadata: [
-                        "error": "\(error)"
-                    ])
-                    await Task.sleep(for: .seconds(15))
-                }
+                await run()
             }
         }
     }
@@ -44,9 +41,10 @@ final class HomeConnectManager: LifecycleHandler {
     
     // MARK: - Run
     
-    private func waitForAuthorization() async throws {
+    private func waitForAuthorization() async {
         while !Task.isCancelled {
-            if try await RefreshToken.query(on: application.db).first() != nil {
+            let refreshToken = try? await RefreshToken.query(on: application.db).first()
+            if refreshToken != nil {
                 break
             }
             
@@ -54,29 +52,82 @@ final class HomeConnectManager: LifecycleHandler {
         }
     }
     
-    private func run() async throws {
-        try await waitForAuthorization()
+    private func run() async {
+        await waitForAuthorization()
         
-        let entries = try await getApplianceEntries()
-        print(entries)
+        let entries = await getApplianceEntriesUntilSucceeded()
+        await monitorEventsUntilCancelled(for: entries)
     }
     
     // MARK: - Appliances
     
+    private func getApplianceEntriesUntilSucceeded() async -> [ApplianceEntry] {
+        while !Task.isCancelled {
+            do {
+                return try await getApplianceEntries()
+            } catch {
+                application.logger.error("Failed to retrieve appliances", metadata: [
+                    "error": "\(error)"
+                ])
+            }
+            
+            await Task.sleep(for: .seconds(30))
+        }
+        
+        return []
+    }
+    
     private func getApplianceEntries() async throws -> [ApplianceEntry] {
+        application.logger.notice("Retrieving appliances...")
         let appliances = try await api.getAppliances()
+        
+        application.logger.notice("Found appliances", metadata: [
+            "appliances": .array(appliances.map { .string("\($0.name) (\($0.id))") })
+        ])
         
         var entries: [ApplianceEntry] = []
         for appliance in appliances {
-            var entry = ApplianceEntry(appliance: appliance)
             if appliance.isConnected {
-                entry.status = try await api.getStatus(forApplianceWithId: appliance.id)
-                entry.settings = try await api.getSettings(forApplianceWithId: appliance.id)
+                async let status = api.getStatus(forApplianceWithId: appliance.id)
+                async let settings = api.getSettings(forApplianceWithId: appliance.id)
+                async let activeProgram = api.getActiveProgram(forApplianceWithId: appliance.id)
+                async let selectedProgram = api.getSelectedProgram(forApplianceWithId: appliance.id)
+                
+                try await entries.append(ApplianceEntry(
+                    appliance: appliance,
+                    status: status,
+                    settings: settings,
+                    activeProgram: activeProgram,
+                    selectedProgram: selectedProgram
+                ))
+            } else {
+                entries.append(ApplianceEntry(appliance: appliance))
             }
-            
-            entries.append(entry)
         }
         
+        application.logger.notice("Fetched all appliance details")
         return entries
+    }
+    
+    // MARK: - Events
+    
+    private func monitorEventsUntilCancelled(for entries: [ApplianceEntry]) async {
+        while !Task.isCancelled {
+            do {
+                try await monitorEvents(for: entries)
+            } catch {
+                application.logger.error("Failed to monitor events", metadata: [
+                    "error": "\(error)"
+                ])
+            }
+            
+            await Task.sleep(for: .seconds(30))
+        }
+    }
+    
+    private func monitorEvents(for entries: [ApplianceEntry]) async throws {
+        for try await event in application.homeConnectAPI.events {
+            print(event)
+        }
     }
 }

@@ -6,7 +6,7 @@
 # docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --push -t sroebert/home-connect-mqtt:latest .
 #
 
-FROM swift:5.5-focal as build
+FROM swiftarm/swift:5.5.2-ubuntu-focal as build
 
 # Install OS updates and, if needed, sqlite3
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
@@ -45,7 +45,7 @@ RUN [ -d /build/Resources ] && { mv /build/Resources ./Resources && chmod -R a-w
 # ================================
 # Run image
 # ================================
-FROM swift:5.5-focal-slim
+FROM swiftarm/swift:5.5.2-ubuntu-focal-slim
 
 # Make sure all system packages are up to date.
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true && \

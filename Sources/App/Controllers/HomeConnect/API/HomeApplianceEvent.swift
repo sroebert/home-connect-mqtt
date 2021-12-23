@@ -60,14 +60,15 @@ extension HomeApplianceEvent.Item {
 
 extension EventSourceDelegate.Event {
     var homeApplianceEvent: HomeApplianceEvent? {
+        if event == "KEEP-ALIVE" {
+            return .init(applianceId: "", kind: .keepAlive)
+        }
+        
         guard let id = id else {
             return nil
         }
         
         switch event {
-        case "KEEP-ALIVE":
-            return .init(applianceId: id, kind: .keepAlive)
-            
         case "STATUS":
             guard let items = homeApplianceEventItems else {
                 return nil

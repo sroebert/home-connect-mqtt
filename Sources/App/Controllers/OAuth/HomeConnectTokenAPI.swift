@@ -94,7 +94,7 @@ struct HomeConnectTokenAPI {
         }
         
         guard response.status == .ok else {
-            throw APIError.apiError(response.status)
+            throw APIError.apiError(response.status, response.body.map(String.init))
         }
         
         let token = try response.content.decode(Token.self)

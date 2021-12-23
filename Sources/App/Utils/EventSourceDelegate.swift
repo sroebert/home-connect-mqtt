@@ -149,7 +149,7 @@ final class EventSourceDelegate: HTTPClientResponseDelegate {
     
     func didReceiveHead(task: HTTPClient.Task<Response>, _ head: HTTPResponseHead) -> EventLoopFuture<Void> {
         guard head.status == .ok else {
-            return task.eventLoop.makeFailedFuture(APIError.apiError(head.status))
+            return task.eventLoop.makeFailedFuture(APIError.apiError(head.status, nil))
         }
         
         resetTimeout(for: task)

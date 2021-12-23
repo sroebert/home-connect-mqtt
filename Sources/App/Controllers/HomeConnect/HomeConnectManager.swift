@@ -29,7 +29,8 @@ final class HomeConnectManager: LifecycleHandler {
     
     private static let mqttPrefix = "home-connect-test"
     private static let mqttCommands: [HomeApplianceCommand.Type] = [
-        HomeAppliancePowerCommand.self
+        HomeAppliancePowerCommand.self,
+        OvenPreheatCommand.self
     ]
     
     private var application: Application!
@@ -64,7 +65,7 @@ final class HomeConnectManager: LifecycleHandler {
                 clean: false,
                 credentials: mqttCredentials,
                 willMessage: .init(topic: topic("connected"), payload: "{}"),
-                sessionExpiry: .never
+                sessionExpiry: .afterInterval(.hours(24))
             ),
             eventLoopGroupProvider: .shared(application.eventLoopGroup),
             logger: application.logger

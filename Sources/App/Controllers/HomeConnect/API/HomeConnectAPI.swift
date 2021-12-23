@@ -12,6 +12,10 @@ struct HomeConnectAPI {
     private let tokenAPI: HomeConnectTokenAPI
     private let client: Client
     
+    private let limiter = Task {
+        await HomeConnectRequestLimiter()
+    }
+    
     // MARK: - Lifecycle
     
     init(
@@ -42,18 +46,7 @@ struct HomeConnectAPI {
     
     private func `get`<Result: Content>(_ path: String, at keyPath: CodingKeyRepresentable...) async throws -> Result {
         let request = try await request(.GET, path)
-        
-        let response: ClientResponse
-        do {
-            response = try await client.send(request)
-        } catch {
-            throw APIError.connectionError(error)
-        }
-        
-        guard response.status == .ok else {
-            throw APIError.apiError(response.status)
-        }
-        
+        let response = try await perform(request)
         return try response.content.get(Result.self, at: keyPath)
     }
     
@@ -67,16 +60,33 @@ struct HomeConnectAPI {
             throw APIError.encodingError(error)
         }
         
+        try await perform(request)
+    }
+    
+    @discardableResult
+    private func perform(_ request: ClientRequest) async throws -> ClientResponse {
         let response: ClientResponse
         do {
-            response = try await client.send(request)
+            response = try await limiter.value.perform {
+                try await client.send(request)
+            }
         } catch {
             throw APIError.connectionError(error)
         }
         
-        guard response.status == .noContent else {
-            throw APIError.apiError(response.status)
+        guard (200..<300).contains(response.status.code) else {
+            if response.status == .tooManyRequests,
+               let seconds = response.headers.first(name: .retryAfter).flatMap(Int64.init) {
+                await limiter.value.disableRequests(for: .seconds(seconds))
+            }
+            
+            throw APIError.apiError(
+                response.status,
+                response.body.map(String.init)
+            )
         }
+        
+        return response
     }
     
     // MARK: - API
@@ -104,7 +114,7 @@ struct HomeConnectAPI {
                 at: "data", type
             )
             return keyValues.parsedDictionary
-        } catch APIError.apiError(.conflict) {
+        } catch APIError.apiError(.conflict, _) {
             return nil
         } catch {
             throw error
@@ -126,8 +136,8 @@ struct HomeConnectAPI {
                 at: "data"
             )
             return programResponse.parsedProgram
-        } catch APIError.apiError(.notFound),
-                APIError.apiError(.conflict) {
+        } catch APIError.apiError(.notFound, _),
+                APIError.apiError(.conflict, _) {
             return nil
         } catch {
             throw error

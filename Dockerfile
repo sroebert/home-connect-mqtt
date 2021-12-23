@@ -1,6 +1,11 @@
 # ================================
 # Build image
 # ================================
+
+#
+# docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --push -t sroebert/home-connect-mqtt:latest .
+#
+
 FROM swift:5.5-focal as build
 
 # Install OS updates and, if needed, sqlite3

@@ -1,7 +1,7 @@
 import Vapor
 
 extension HomeAppliance {
-    struct Program {
+    struct Program: Encodable {
         
         // MARK: - Public Vars
         

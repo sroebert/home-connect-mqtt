@@ -1,6 +1,6 @@
 import Vapor
 
-struct HomeAppliance: Content {
+struct HomeAppliance: Content, Identifiable {
     
     // MARK: - Public Vars
     
@@ -8,6 +8,9 @@ struct HomeAppliance: Content {
     var name: String
     var brand: String
     var type: String
+    
+    var vib: String
+    var eNumber: String
     
     var isConnected: Bool
     
@@ -18,6 +21,8 @@ struct HomeAppliance: Content {
         case name
         case brand
         case type
+        case vib
+        case eNumber = "enumber"
         case isConnected = "connected"
     }
 }

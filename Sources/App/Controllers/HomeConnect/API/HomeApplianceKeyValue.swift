@@ -14,16 +14,7 @@ extension Array where Element == HomeApplianceKeyValue {
         
         for element in self {
             let parsedKey = element.key.homeConnectKeyValueParsed
-            
-            let parsedValue: JSON
-            switch element.value {
-            case .string(let string):
-                parsedValue = .string(string.homeConnectKeyValueParsed)
-                
-            default:
-                parsedValue = element.value
-            }
-            
+            let parsedValue = element.value.homeConnectParsed
             dictionary[parsedKey] = parsedValue
         }
         

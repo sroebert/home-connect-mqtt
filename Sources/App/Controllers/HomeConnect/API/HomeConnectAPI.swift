@@ -57,25 +57,47 @@ struct HomeConnectAPI {
         return try response.content.get(Result.self, at: keyPath)
     }
     
+    private func put(_ path: String, data: JSON) async throws {
+        var request = try await request(.PUT, path)
+        do {
+            try request.content.encode(JSON.dictionary([
+                "data": data
+            ]), as: .homeConnectJSONAPI)
+        } catch {
+            throw APIError.encodingError(error)
+        }
+        
+        let response: ClientResponse
+        do {
+            response = try await client.send(request)
+        } catch {
+            throw APIError.connectionError(error)
+        }
+        
+        guard response.status == .noContent else {
+            throw APIError.apiError(response.status)
+        }
+    }
+    
     // MARK: - API
     
     func getAppliances() async throws -> [HomeAppliance] {
         try await get("homeappliances", at: "data", "homeappliances")
     }
     
-    func getAppliance(withId applianceId: String) async throws -> HomeAppliance {
+    func getAppliance(withId applianceId: HomeAppliance.ID) async throws -> HomeAppliance {
         try await get("homeappliances/\(applianceId)", at: "data", "homeappliances")
     }
     
-    func getStatus(forApplianceWithId applianceId: String) async throws -> [String: JSON]? {
+    func getStatus(forApplianceWithId applianceId: HomeAppliance.ID) async throws -> [String: JSON]? {
         try await getKeyValues(forApplianceWithId: applianceId, type: "status")
     }
     
-    func getSettings(forApplianceWithId applianceId: String) async throws -> [String: JSON]? {
+    func getSettings(forApplianceWithId applianceId: HomeAppliance.ID) async throws -> [String: JSON]? {
         try await getKeyValues(forApplianceWithId: applianceId, type: "settings")
     }
     
-    private func getKeyValues(forApplianceWithId applianceId: String, type: String) async throws -> [String: JSON]? {
+    private func getKeyValues(forApplianceWithId applianceId: HomeAppliance.ID, type: String) async throws -> [String: JSON]? {
         do {
             let keyValues: [HomeApplianceKeyValue] = try await get(
                 "homeappliances/\(applianceId)/\(type)",
@@ -89,15 +111,15 @@ struct HomeConnectAPI {
         }
     }
     
-    func getActiveProgram(forApplianceWithId applianceId: String) async throws -> HomeAppliance.Program? {
+    func getActiveProgram(forApplianceWithId applianceId: HomeAppliance.ID) async throws -> HomeAppliance.Program? {
         try await getProgram(forApplianceWithId: applianceId, type: "active")
     }
     
-    func getSelectedProgram(forApplianceWithId applianceId: String) async throws -> HomeAppliance.Program? {
+    func getSelectedProgram(forApplianceWithId applianceId: HomeAppliance.ID) async throws -> HomeAppliance.Program? {
         try await getProgram(forApplianceWithId: applianceId, type: "selected")
     }
     
-    private func getProgram(forApplianceWithId applianceId: String, type: String) async throws -> HomeAppliance.Program? {
+    private func getProgram(forApplianceWithId applianceId: HomeAppliance.ID, type: String) async throws -> HomeAppliance.Program? {
         do {
             let programResponse: HomeAppliance.Program.Response = try await get(
                 "homeappliances/\(applianceId)/programs/\(type)",
@@ -112,25 +134,51 @@ struct HomeConnectAPI {
         }
     }
     
+    func updateAppliance(withId applianceId: HomeAppliance.ID, path: String, data: JSON) async throws {
+        try await put(
+            "homeappliances/\(applianceId)/\(path)",
+            data: data
+        )
+    }
+    
     // MARK: - Events
     
+    private var eventsRequest: HTTPClient.Request {
+        get async throws {
+            let request = try await request(.GET, "homeappliances/events")
+            return try HTTPClient.Request(
+                url: URL(string: request.url.string)!,
+                method: request.method,
+                headers: request.headers,
+                body: nil
+            )
+        }
+    }
+    
+    private func logParsingError(for event: EventSourceDelegate.Event) {
+        application.logger.warning("Could not parse received event", metadata: {
+            var metadata: Logger.Metadata = [:]
+            metadata["id"] = event.id.map { .string($0) }
+            metadata["event"] = event.event.map { .string($0) }
+            metadata["data"] = event.data.map { .string($0) }
+            return metadata
+        }())
+    }
+    
     var events: AsyncThrowingStream<HomeApplianceEvent, Error> {
-        .init { continuation in
+        AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let request = try await request(.GET, "homeappliances/events")
-                    let ahcRequest = try HTTPClient.Request(
-                        url: URL(string: request.url.string)!,
-                        method: request.method,
-                        headers: request.headers,
-                        body: nil
-                    )
+                    let request = try await eventsRequest
                     
                     let task = application.http.client.shared.execute(
-                        request: ahcRequest,
-                        delegate: EventSourceDelegate(timeout: .seconds(60)) {
-                            print($0)
-//                            continuation.yield($0)
+                        request: request,
+                        delegate: EventSourceDelegate(timeout: .seconds(60)) { event in
+                            guard let homeApplianceEvent = event.homeApplianceEvent else {
+                                logParsingError(for: event)
+                                return
+                            }
+                            continuation.yield(homeApplianceEvent)
                         },
                         logger: application.logger
                     )

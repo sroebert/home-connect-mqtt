@@ -2,6 +2,7 @@ import Fluent
 import FluentSQLiteDriver
 import Leaf
 import Vapor
+import MQTTNIO
 
 public func configure(_ app: Application) throws {
     
@@ -13,12 +14,12 @@ public func configure(_ app: Application) throws {
     // JSON
     
     ContentConfiguration.global.use(
-        decoder: JSONDecoder.custom(dates: .iso8601),
-        for: HTTPMediaType(
-            type: "application",
-            subType: "vnd.bsh.sdk.v1+json",
-            parameters: ["charset": "utf-8"]
-        )
+        decoder: JSONDecoder.custom(dates: .secondsSince1970),
+        for: .homeConnectJSONAPI
+    )
+    ContentConfiguration.global.use(
+        encoder: JSONEncoder.custom(dates: .secondsSince1970),
+        for: .homeConnectJSONAPI
     )
     
     // Database
@@ -52,5 +53,20 @@ public func configure(_ app: Application) throws {
     
     // Home Connect
     
-    app.lifecycle.use(HomeConnectManager())
+    guard let mqttURL = Environment.get("MQTT_URL").flatMap({ URL(string: $0) }) else {
+        fatalError("Missing MQTT URL")
+    }
+    
+    let mqttCredentials: MQTTConfiguration.Credentials?
+    if let username = Environment.get("MQTT_USERNAME"),
+       let password = Environment.get("MQTT_PASSWORD") {
+        mqttCredentials = .init(username: username, password: password)
+    } else {
+        mqttCredentials = nil
+    }
+    
+    app.lifecycle.use(HomeConnectManager(
+        mqttURL: mqttURL,
+        mqttCredentials: mqttCredentials
+    ))
 }

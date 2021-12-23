@@ -7,7 +7,7 @@ enum JSON: Content, Equatable {
     case double(Double)
     case string(String)
     case array([JSON])
-    case dictionary([String : JSON])
+    case dictionary([String: JSON])
     
     // MARK: - Lifecycle
     
@@ -84,6 +84,18 @@ extension JSON: ExpressibleByIntegerLiteral {
 extension JSON: ExpressibleByFloatLiteral {
     init(floatLiteral value: Float) {
         self = .double(Double(value))
+    }
+}
+
+extension JSON: ExpressibleByArrayLiteral {
+    init(arrayLiteral elements: JSON...) {
+        self = .array(elements)
+    }
+}
+
+extension JSON: ExpressibleByDictionaryLiteral {
+    init(dictionaryLiteral elements: (String, JSON)...) {
+        self = .dictionary(.init(uniqueKeysWithValues: elements))
     }
 }
 

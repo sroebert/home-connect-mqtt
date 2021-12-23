@@ -1,5 +1,0 @@
-import Vapor
-
-enum HomeApplianceEvent {
-    
-}

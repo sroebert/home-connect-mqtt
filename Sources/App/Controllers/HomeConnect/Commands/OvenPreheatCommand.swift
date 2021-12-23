@@ -25,7 +25,7 @@ struct OvenPreheatCommand: HomeApplianceCommand {
     
     // MARK: - Public Vars
     
-    static let id: String = "power"
+    static let id: String = "preheat"
     
     let path: String
     let data: JSON

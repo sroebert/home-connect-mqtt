@@ -12,7 +12,7 @@ actor HomeConnectRequestLimiter {
     private var allowedRequestCount = 0
     private var requestsTemporarilyDisabled = false
     
-    private var refreshTask: Task<Void, Never>!
+    private var refreshTask: Task<Void, Never>?
     private var requestUpdateSequence: AsyncStream<Void>!
     private var requestUpdateContinuation: AsyncStream<Void>.Continuation!
     
@@ -21,21 +21,16 @@ actor HomeConnectRequestLimiter {
     // MARK: - Lifecycle
     
     init() async {
-        refreshTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.refreshAllowedRequestCount()
-                try? await Task.sleep(for: .minutes(1))
-            }
-        }
-        
         requestUpdateSequence = AsyncStream {
             requestUpdateContinuation = $0
         }
+        
+        setupRefreshTask()
     }
     
     deinit {
         disableTask?.cancel()
-        refreshTask.cancel()
+        refreshTask?.cancel()
         requestUpdateContinuation.finish()
     }
     
@@ -44,6 +39,15 @@ actor HomeConnectRequestLimiter {
     private func refreshAllowedRequestCount() {
         allowedRequestCount = Self.requestsPerMinute
         requestUpdateContinuation.yield()
+    }
+    
+    private func setupRefreshTask() {
+        refreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshAllowedRequestCount()
+                try? await Task.sleep(for: .minutes(1))
+            }
+        }
     }
     
     // MARK: - Public
@@ -57,10 +61,14 @@ actor HomeConnectRequestLimiter {
     func disableRequests(for timeAmount: TimeAmount) {
         requestsTemporarilyDisabled = true
         
+        refreshTask?.cancel()
         disableTask?.cancel()
+        
         disableTask = Task {
             try await Task.sleep(for: timeAmount)
+            
             requestsTemporarilyDisabled = false
+            setupRefreshTask()
         }
     }
     

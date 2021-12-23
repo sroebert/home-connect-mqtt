@@ -136,8 +136,8 @@ final class HomeConnectManager: LifecycleHandler {
                 ])
             }
             
-            application.logger.info("Retrying to monitor in 30 seconds")
-            try? await Task.sleep(for: .seconds(30))
+            application.logger.info("Retrying to monitor in 10 seconds")
+            try? await Task.sleep(for: .seconds(10))
         }
     }
     

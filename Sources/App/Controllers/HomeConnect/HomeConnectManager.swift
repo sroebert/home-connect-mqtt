@@ -27,7 +27,7 @@ final class HomeConnectManager: LifecycleHandler {
     
     // MARK: - Private Vars
     
-    private static let mqttPrefix = "home-connect-test"
+    private static let mqttPrefix = "home-connect"
     private static let mqttCommands: [HomeApplianceCommand.Type] = [
         HomeAppliancePowerCommand.self,
         OvenPreheatCommand.self

@@ -65,7 +65,7 @@ public func configure(_ app: Application) throws {
         mqttCredentials = nil
     }
     
-    app.lifecycle.use(HomeConnectManager(
+    app.lifecycle.use(HomeConnectProvider(
         mqttURL: mqttURL,
         mqttCredentials: mqttCredentials
     ))

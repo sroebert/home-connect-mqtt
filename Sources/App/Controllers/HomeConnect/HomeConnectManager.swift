@@ -1,7 +1,8 @@
 import Vapor
 import MQTTNIO
+import NIOCore
 
-final class HomeConnectManager: LifecycleHandler {
+actor HomeConnectManager {
     
     // MARK: - Types
     
@@ -35,36 +36,37 @@ final class HomeConnectManager: LifecycleHandler {
     
     private var application: Application!
     private var api: HomeConnectAPI!
-    
-    private let mqttURL: URL
-    private let mqttCredentials: MQTTConfiguration.Credentials?
     private var mqttClient: MQTTClient!
     
     private let mqttJSONEncoder = JSONEncoder()
     private let mqttJSONDecoder = JSONDecoder()
     
-    private var runTask: Task<Void, Error>?
+    private var runTask: Task<Void, Never>?
     private var mqttCommandTask: Task<Void, Never>?
+    
+    private static let monitoringTimeoutInterval: TimeAmount = .hours(2)
+    private var monitorTimeoutTask: Task<Void, Error>?
+    private var monitorTask: Task<Void, Error>?
     
     // MARK: - Lifecycle
     
-    init(mqttURL: URL, mqttCredentials: MQTTConfiguration.Credentials?) {
-        self.mqttURL = mqttURL
-        self.mqttCredentials = mqttCredentials
-    }
-    
-    // MARK: - LifecycleHandler
-    
-    func willBoot(_ application: Application) throws {
+    init(
+        application: Application,
+        api: HomeConnectAPI,
+        mqttURL: URL,
+        mqttCredentials: MQTTConfiguration.Credentials?
+    ) {
         self.application = application
         self.api = application.homeConnectAPI
-        
         self.mqttClient = MQTTClient(
             configuration: MQTTConfiguration(
                 url: mqttURL,
                 clean: false,
                 credentials: mqttCredentials,
-                willMessage: .init(topic: topic("connected"), payload: "{}"),
+                willMessage: .init(
+                    topic: Self.topic("connected"),
+                    payload: .string("false", contentType: "application/json")
+                ),
                 sessionExpiry: .afterInterval(.hours(24))
             ),
             eventLoopGroupProvider: .shared(application.eventLoopGroup),
@@ -72,32 +74,46 @@ final class HomeConnectManager: LifecycleHandler {
         )
     }
     
-    func didBoot(_ application: Application) throws {
+    // MARK: - Start / Stop
+    
+    func start() async {
+        guard runTask == nil else {
+            return
+        }
+        
         runTask = Task {
             while !Task.isCancelled {
-                try await run()
+                await run()
             }
         }
     }
     
-    func shutdown(_ application: Application) {
-        let semaphore = DispatchSemaphore(value: 0)
-        Task.detached(priority: .userInitiated) {
-            self.runTask?.cancel()
-            try? await self.runTask?.value
-        
-            self.mqttCommandTask?.cancel()
-            await self.mqttCommandTask?.value
-            
-            try? await self.mqttClient.disconnect(
-                sendWillMessage: true,
-                sessionExpiry: .atClose
-            )
-            
-            semaphore.signal()
+    func stop() async {
+        guard runTask != nil else {
+            return
         }
         
-        semaphore.wait()
+        monitorTimeoutTask?.cancel()
+        try? await monitorTimeoutTask?.value
+        
+        monitorTask?.cancel()
+        try? await monitorTask?.value
+        
+        mqttCommandTask?.cancel()
+        await mqttCommandTask?.value
+        
+        runTask?.cancel()
+        await runTask?.value
+        
+        try? await mqttClient.disconnect(
+            sendWillMessage: true,
+            sessionExpiry: .atClose
+        )
+        
+        monitorTimeoutTask = nil
+        monitorTask = nil
+        mqttCommandTask = nil
+        runTask = nil
     }
     
     // MARK: - Run
@@ -113,11 +129,13 @@ final class HomeConnectManager: LifecycleHandler {
         }
     }
     
-    private func run() async throws {
+    private func run() async {
         await waitForAuthorization()
         
         let manager = HomeApplianceStateManager(api: api) { [weak self] states, applianceId, updateType in
-            self?.onUpdate(states: states, applianceId: applianceId, updateType: updateType)
+            Task { [self] in
+                await self?.onUpdate(states: states, applianceId: applianceId, updateType: updateType)
+            }
         }
         
         setupMQTT(for: manager)
@@ -134,10 +152,10 @@ final class HomeConnectManager: LifecycleHandler {
                 application.logger.error("Failed to monitor events", metadata: [
                     "error": "\(error)"
                 ])
+                
+                application.logger.info("Retrying to monitor in 10 seconds")
+                try? await Task.sleep(for: .seconds(10))
             }
-            
-            application.logger.info("Retrying to monitor in 10 seconds")
-            try? await Task.sleep(for: .seconds(10))
         }
     }
     
@@ -160,18 +178,44 @@ final class HomeConnectManager: LifecycleHandler {
     
     // MARK: - Events
     
+    private func setupMonitorTimeoutTask() {
+        monitorTimeoutTask?.cancel()
+        monitorTimeoutTask = Task {
+            try await Task.sleep(for: Self.monitoringTimeoutInterval)
+            
+            application.logger.info("No event for 2 hours, cancelling monitoring")
+            monitorTask?.cancel()
+        }
+    }
+    
     private func monitorEvents(for manager: HomeApplianceStateManager) async throws {
         application.logger.notice("Monitoring events...")
         
-        for try await event in application.homeConnectAPI.events {
-            application.logger.trace("Received event", metadata: [
-                "event": "\(event)"
-            ])
-            
-            Task {
-                await process(event, for: manager)
+        monitorTask = Task {
+            for try await event in application.homeConnectAPI.events {
+                application.logger.trace("Received event", metadata: [
+                    "event": "\(event)"
+                ])
+                
+                if !event.kind.isKeepAlive {
+                    setupMonitorTimeoutTask()
+                }
+                
+                Task {
+                    await process(event, for: manager)
+                }
             }
         }
+        
+        defer {
+            monitorTask = nil
+            
+            monitorTimeoutTask?.cancel()
+            monitorTimeoutTask = nil
+        }
+        
+        setupMonitorTimeoutTask()
+        try await monitorTask?.value
     }
     
     private func process(_ event: HomeApplianceEvent, for manager: HomeApplianceStateManager) async {
@@ -222,7 +266,7 @@ final class HomeConnectManager: LifecycleHandler {
     
     private func onUpdate(
         states: [HomeAppliance.ID: HomeApplianceState],
-        applianceId: HomeAppliance.ID?,
+        applianceId: HomeAppliance.ID,
         updateType: HomeApplianceUpdateType
     ) {
         Task {
@@ -244,12 +288,17 @@ final class HomeConnectManager: LifecycleHandler {
     
     private func setupMQTT(for manager: HomeApplianceStateManager) {
         mqttClient.whenConnected { [weak self] response in
-            guard !response.isSessionPresent else {
-                return
+            if !response.isSessionPresent {
+                Task { [self] in
+                    try await self?.mqttClient.subscribe(to: Topic.allCases.map(\.filter))
+                }
             }
             
             Task { [self] in
-                try await self?.mqttClient.subscribe(to: Topic.allCases.map(\.filter))
+                try await self?.mqttClient.publish(
+                    .string("true", contentType: "application/json"),
+                    to: Self.topic("connected")
+                )
             }
         }
         
@@ -278,12 +327,12 @@ final class HomeConnectManager: LifecycleHandler {
         }
     }
     
-    private func topic(_ name: String) -> String {
-        return "\(Self.mqttPrefix)/\(name)"
+    private static func topic(_ name: String) -> String {
+        return "\(mqttPrefix)/\(name)"
     }
     
-    private func topic(applianceId: HomeAppliance.ID, _ name: String) -> String {
-        return "\(Self.mqttPrefix)/\(applianceId)/\(name)"
+    private static func topic(applianceId: HomeAppliance.ID, _ name: String) -> String {
+        return "\(mqttPrefix)/\(applianceId)/\(name)"
     }
     
     private func payload<E: Encodable>(for encodable: E?) throws -> MQTTPayload {
@@ -307,72 +356,55 @@ final class HomeConnectManager: LifecycleHandler {
     
     private func publish(_ states: [HomeAppliance.ID: HomeApplianceState]) async throws {
         for applianceId in states.keys {
-            try await publish(states, applianceId: applianceId)
-        }
-    }
-    
-    private func publish(_ states: [HomeAppliance.ID: HomeApplianceState], applianceId: HomeAppliance.ID) async throws {
-        let updateTypes: [HomeApplianceUpdateType] = [
-            .info, .status, .settings, .activeProgram, .selectedProgram
-        ]
-        
-        for updateType in updateTypes {
-            try await publishUpdate(states: states, applianceId: applianceId, updateType: updateType)
+            for updateType in HomeApplianceUpdateType.allCases {
+                try await publishUpdate(states: states, applianceId: applianceId, updateType: updateType)
+            }
         }
     }
     
     private func publishUpdate(
         states: [HomeAppliance.ID: HomeApplianceState],
-        applianceId: HomeAppliance.ID?,
+        applianceId: HomeAppliance.ID,
         updateType: HomeApplianceUpdateType
     ) async throws {
+        guard let state = states[applianceId] else {
+            return
+        }
+        
         let topic: String
         let payload: MQTTPayload
         
-        if updateType == .isConnected {
-            topic = self.topic("connected")
+        switch updateType {
+        case .isConnected:
+            topic = Self.topic(applianceId: state.appliance.id, "connected")
+            payload = try self.payload(for: state.appliance.isConnected)
             
-            var connectionStates: [HomeAppliance.ID: Bool] = [:]
-            for (id, state) in states {
-                connectionStates[id] = state.appliance.isConnected
-            }
-            payload = try self.payload(for: connectionStates)
-        } else {
-            guard let applianceId = applianceId, let state = states[applianceId] else {
-                return
-            }
+        case .info:
+            topic = Self.topic(applianceId: state.appliance.id, "info")
+            payload = try self.payload(for: [
+                "id": state.appliance.id,
+                "name": state.appliance.name,
+                "brand": state.appliance.brand,
+                "type": state.appliance.type,
+                "vib": state.appliance.vib,
+                "eNumber": state.appliance.eNumber
+            ])
             
-            switch updateType {
-            case .isConnected:
-                return
-                
-            case .info:
-                topic = self.topic(applianceId: state.appliance.id, "info")
-                payload = try self.payload(for: [
-                    "id": state.appliance.id,
-                    "name": state.appliance.name,
-                    "brand": state.appliance.brand,
-                    "type": state.appliance.type,
-                    "vib": state.appliance.vib,
-                    "eNumber": state.appliance.eNumber
-                ])
-                
-            case .status:
-                topic = self.topic(applianceId: state.appliance.id, "status")
-                payload = try self.payload(for: state.status)
-                
-            case .settings:
-                topic = self.topic(applianceId: state.appliance.id, "settings")
-                payload = try self.payload(for: state.settings)
-                
-            case .activeProgram:
-                topic = self.topic(applianceId: state.appliance.id, "programs/active")
-                payload = try self.payload(for: state.activeProgram)
-                
-            case .selectedProgram:
-                topic = self.topic(applianceId: state.appliance.id, "programs/selected")
-                payload = try self.payload(for: state.selectedProgram)
-            }
+        case .status:
+            topic = Self.topic(applianceId: state.appliance.id, "status")
+            payload = try self.payload(for: state.status)
+            
+        case .settings:
+            topic = Self.topic(applianceId: state.appliance.id, "settings")
+            payload = try self.payload(for: state.settings)
+            
+        case .activeProgram:
+            topic = Self.topic(applianceId: state.appliance.id, "programs/active")
+            payload = try self.payload(for: state.activeProgram)
+            
+        case .selectedProgram:
+            topic = Self.topic(applianceId: state.appliance.id, "programs/selected")
+            payload = try self.payload(for: state.selectedProgram)
         }
         
         try await mqttClient.publish(payload, to: topic)
@@ -385,7 +417,7 @@ final class HomeConnectManager: LifecycleHandler {
     ) async throws {
         try await mqttClient.publish(
             payload(for: value),
-            to: topic(applianceId: applianceId, "events/\(name)")
+            to: Self.topic(applianceId: applianceId, "events/\(name)")
         )
     }
     
@@ -394,7 +426,6 @@ final class HomeConnectManager: LifecycleHandler {
         switch command {
         case "announce":
             let states = await manager.states
-            try await publishUpdate(states: states, applianceId: nil, updateType: .isConnected)
             try await publish(states)
             
         default:

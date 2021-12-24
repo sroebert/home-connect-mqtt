@@ -18,11 +18,20 @@ extension HomeApplianceEvent {
         case connected
         case paired
         case depaired
+        
+        var isKeepAlive: Bool {
+            switch self {
+            case .keepAlive:
+                return true
+            default:
+                return false
+            }
+        }
     }
     
     struct Item {
         var key: String
-        var uri: String
+        var uri: String?
         var timestamp: Date
         var value: JSON?
     }
@@ -41,7 +50,7 @@ extension HomeApplianceEvent.Item {
         // MARK: - Public Vars
         
         var key: String
-        var uri: String
+        var uri: String?
         var timestamp: Date
         var value: JSON?
         

@@ -11,7 +11,7 @@ actor HomeApplianceStateManager {
         var updateType: HomeApplianceUpdateType
     }
     
-    typealias UpdateHandler = @Sendable ([HomeAppliance.ID: HomeApplianceState], HomeAppliance.ID?, HomeApplianceUpdateType) -> Void
+    typealias UpdateHandler = @Sendable ([HomeAppliance.ID: HomeApplianceState], HomeAppliance.ID, HomeApplianceUpdateType) -> Void
     
     private struct StateUpdateResult {
         var updated = Set<HomeApplianceUpdateType>()
@@ -129,7 +129,9 @@ actor HomeApplianceStateManager {
         
         states.removeAll()
         
-        onUpdate(states, nil, .isConnected)
+        for id in states.keys {
+            onUpdate(states, id, .isConnected)
+        }
     }
     
     func insertAppliance(withId applianceId: HomeAppliance.ID) async throws {

@@ -221,53 +221,48 @@ actor HomeApplianceStateManager {
         var result = StateUpdateResult()
         let urlPrefix = "/api/homeappliances/\(applianceId)"
         for item in items {
-            switch item.uri {
-            case "\(urlPrefix)/status/\(item.key)":
+            guard let uri = item.uri else {
+                continue
+            }
+            
+            if uri.hasPrefix("\(urlPrefix)/status/") {
                 updateOptions(.status, with: item, result: &result) {
                     state.status
                 } set: {
                     state.status = $0
                 }
-                
-            case "\(urlPrefix)/settings/\(item.key)":
+            } else if uri.hasPrefix("\(urlPrefix)/settings/") {
                 updateOptions(.settings, with: item, result: &result) {
                     state.settings
                 } set: {
                     state.settings = $0
                 }
-                
-            case "\(urlPrefix)/programs/active":
+            } else if uri == "\(urlPrefix)/programs/active" {
                 if item.value != nil {
                     result.fetchRequired.insert(.activeProgram)
                 } else if state.activeProgram != nil {
                     state.activeProgram = nil
                     result.updated.insert(.activeProgram)
                 }
-                
-            case "\(urlPrefix)/programs/active/options/\(item.key)":
+            } else if uri.hasPrefix("\(urlPrefix)/programs/active/options/") {
                 updateOptions(.settings, with: item, result: &result) {
                     state.activeProgram?.options
                 } set: {
                     state.activeProgram?.options = $0
                 }
-                
-            case "\(urlPrefix)/programs/selected":
+            } else if uri == "\(urlPrefix)/programs/selected" {
                 if item.value != nil {
                     result.fetchRequired.insert(.selectedProgram)
                 } else if state.activeProgram != nil {
                     state.activeProgram = nil
                     result.updated.insert(.selectedProgram)
                 }
-                
-            case "\(urlPrefix)/programs/selected/options/\(item.key)":
+            } else if uri.hasPrefix("\(urlPrefix)/programs/selected/options/") {
                 updateOptions(.settings, with: item, result: &result) {
                     state.selectedProgram?.options
                 } set: {
                     state.selectedProgram?.options = $0
                 }
-                
-            default:
-                break
             }
         }
         

@@ -49,12 +49,12 @@ struct OvenPreheatCommand: HomeApplianceCommand {
         event = HomeApplianceEvent(
             applianceId: appliance.id,
             kind: .notify([
-                HomeApplianceEvent.Item(
+                HomeApplianceEvent.Item.Response(
                     key: Keys.activeProgram,
                     uri: "/api/homeappliances/\(appliance.id)/programs/active",
                     timestamp: Date(),
                     value: Keys.preHeating
-                )
+                ).parsedEventItem
             ])
         )
     }

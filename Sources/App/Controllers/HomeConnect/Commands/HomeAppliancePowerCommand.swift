@@ -51,12 +51,12 @@ struct HomeAppliancePowerCommand: HomeApplianceCommand {
         event = HomeApplianceEvent(
             applianceId: appliance.id,
             kind: .notify([
-                HomeApplianceEvent.Item(
+                HomeApplianceEvent.Item.Response(
                     key: Keys.powerState,
                     uri: "/api/homeappliances/\(appliance.id)/settings/\(Keys.powerState)",
                     timestamp: Date(),
                     value: jsonValue
-                )
+                ).parsedEventItem
             ])
         )
     }

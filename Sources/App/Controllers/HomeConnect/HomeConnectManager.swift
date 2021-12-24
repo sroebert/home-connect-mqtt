@@ -310,6 +310,11 @@ actor HomeConnectManager {
             for await message in mqttClient.messages {
                 Task {
                     do {
+                        application.logger.trace("Received command", metadata: [
+                            "topic": .string(message.topic),
+                            "command": .string(message.payload.string ?? "")
+                        ])
+                        
                         if message.topic.matchesMqttTopicFilter(Topic.globalCommand.filter) {
                             try await handleGlobalCommand(message, for: manager)
                         } else if message.topic.matchesMqttTopicFilter(Topic.applianceCommand.filter) {
@@ -481,9 +486,19 @@ actor HomeConnectManager {
         let path = command.path
         let data = command.data
         
-        try await api.updateAppliance(withId: state.appliance.id, path: path, data: data)
-        
-        let event = command.event
-        await process(event, for: manager)
+        do {
+            try await api.updateAppliance(withId: state.appliance.id, path: path, data: data)
+            
+            let event = command.event
+            await process(event, for: manager)
+        } catch {
+            let jsonString = (try? mqttJSONEncoder.encode(data)).flatMap { String(data: $0, encoding: .utf8) }
+            application.logger.error("Failed to perform appliance update", metadata: [
+                "error": "\(error)",
+                "command": .string(type(of: command).id),
+                "path": .string(path),
+                "data": .string(jsonString ?? "")
+            ])
+        }
     }
 }

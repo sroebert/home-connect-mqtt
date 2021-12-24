@@ -245,7 +245,7 @@ actor HomeApplianceStateManager {
                     result.updated.insert(.activeProgram)
                 }
             } else if uri.hasPrefix("\(urlPrefix)/programs/active/options/") {
-                updateOptions(.settings, with: item, result: &result) {
+                updateOptions(.activeProgram, with: item, result: &result) {
                     state.activeProgram?.options
                 } set: {
                     state.activeProgram?.options = $0
@@ -258,7 +258,7 @@ actor HomeApplianceStateManager {
                     result.updated.insert(.selectedProgram)
                 }
             } else if uri.hasPrefix("\(urlPrefix)/programs/selected/options/") {
-                updateOptions(.settings, with: item, result: &result) {
+                updateOptions(.selectedProgram, with: item, result: &result) {
                     state.selectedProgram?.options
                 } set: {
                     state.selectedProgram?.options = $0

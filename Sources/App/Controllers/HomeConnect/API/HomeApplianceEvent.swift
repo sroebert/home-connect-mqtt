@@ -88,13 +88,13 @@ extension EventSourceDelegate.Event {
             guard let items = homeApplianceEventItems else {
                 return nil
             }
-            return .init(applianceId: id, kind: .status(items))
+            return .init(applianceId: id, kind: .event(items))
             
         case "NOTIFY":
             guard let items = homeApplianceEventItems else {
                 return nil
             }
-            return .init(applianceId: id, kind: .status(items))
+            return .init(applianceId: id, kind: .notify(items))
             
         case "DISCONNECTED":
             return .init(applianceId: id, kind: .disconnected)

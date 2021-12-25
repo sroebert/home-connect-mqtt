@@ -21,9 +21,15 @@ actor HomeConnectTokenManager {
         }
 
         let task = refreshTokenTask ?? Task {
-            try await refresh()
+            defer {
+                refreshTokenTask = nil
+            }
+            
+            return try await refresh()
         }
-        self.refreshTokenTask = task
+        
+        refreshTokenTask = task
+        
         return try await task.value
     }
 }

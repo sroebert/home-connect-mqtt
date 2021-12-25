@@ -80,6 +80,10 @@ struct HomeConnectAPI {
                 await limiter.value.disableRequests(for: .seconds(seconds))
             }
             
+            if response.status == .unauthorized {
+                await tokenAPI.invalidateAccessToken()
+            }
+            
             throw APIError.apiError(
                 response.status,
                 response.body.map(String.init)

@@ -67,6 +67,10 @@ struct HomeConnectTokenAPI {
         ))
     }
     
+    func invalidateAccessToken() async {
+        await Self.tokenManager.invalidate()
+    }
+    
     // MARK: - Refresh Token
     
     private func refreshToken() async throws -> AccessToken {

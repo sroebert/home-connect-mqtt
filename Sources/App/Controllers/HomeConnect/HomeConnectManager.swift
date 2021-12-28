@@ -295,10 +295,7 @@ actor HomeConnectManager {
             }
             
             Task { [self] in
-                try await self?.mqttClient.publish(
-                    .string("true", contentType: "application/json"),
-                    to: Self.topic("connected")
-                )
+                try await self?.publishConnected()
             }
         }
         
@@ -357,6 +354,13 @@ actor HomeConnectManager {
         }
         
         return .string(jsonString, contentType: "")
+    }
+    
+    private func publishConnected() async throws {
+        try await mqttClient.publish(
+            .string("true", contentType: "application/json"),
+            to: Self.topic("connected")
+        )
     }
     
     private func publish(_ states: [HomeAppliance.ID: HomeApplianceState]) async throws {
@@ -430,6 +434,8 @@ actor HomeConnectManager {
         let command = message.payload.string?.lowercased()
         switch command {
         case "announce":
+            try await publishConnected()
+            
             let states = await manager.states
             try await publish(states)
             

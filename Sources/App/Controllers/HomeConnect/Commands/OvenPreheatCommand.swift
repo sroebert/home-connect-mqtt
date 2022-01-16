@@ -43,7 +43,7 @@ struct OvenPreheatCommand: HomeApplianceCommand {
         path = "programs/active"
         data = [
             "key": Keys.preHeating,
-            "value": Self.jsonValue(for: value)
+            "options": Self.jsonValue(for: value)
         ]
         
         event = HomeApplianceEvent(

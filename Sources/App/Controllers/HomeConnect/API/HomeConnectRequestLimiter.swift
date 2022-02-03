@@ -13,32 +13,33 @@ actor HomeConnectRequestLimiter {
     private var requestsTemporarilyDisabled = false
     
     private var refreshTask: Task<Void, Never>?
-    private var requestUpdateSequence: AsyncStream<Void>!
-    private var requestUpdateContinuation: AsyncStream<Void>.Continuation!
+    
+    private var requestUpdateContinuations: [AsyncStream<Void>.Continuation] = []
     
     private var disableTask: Task<Void, Error>?
     
     // MARK: - Lifecycle
     
     init() async {
-        requestUpdateSequence = AsyncStream {
-            requestUpdateContinuation = $0
-        }
-        
         setupRefreshTask()
     }
     
     deinit {
         disableTask?.cancel()
         refreshTask?.cancel()
-        requestUpdateContinuation.finish()
+        requestUpdateContinuations.forEach { $0.finish() }
     }
     
     // MARK: - Utils
     
+    private func triggerRequestUpdate() {
+        requestUpdateContinuations.forEach { $0.finish() }
+        requestUpdateContinuations.removeAll()
+    }
+    
     private func refreshAllowedRequestCount() {
         allowedRequestCount = Self.requestsPerMinute
-        requestUpdateContinuation.yield()
+        triggerRequestUpdate()
     }
     
     private func setupRefreshTask() {
@@ -74,7 +75,10 @@ actor HomeConnectRequestLimiter {
     
     func perform<Response>(_ request: @Sendable () async throws -> Response) async throws -> Response {
         while !canPerformRequest {
-            var iterator = requestUpdateSequence.makeAsyncIterator()
+            let stream = AsyncStream {
+                requestUpdateContinuations.append($0)
+            }
+            var iterator = stream.makeAsyncIterator()
             await iterator.next()
         }
         
@@ -83,7 +87,7 @@ actor HomeConnectRequestLimiter {
         
         defer {
             activeRequests -= 1
-            requestUpdateContinuation.yield()
+            triggerRequestUpdate()
         }
         
         return try await request()

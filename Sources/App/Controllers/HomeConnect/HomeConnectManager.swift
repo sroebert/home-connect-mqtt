@@ -67,7 +67,8 @@ actor HomeConnectManager {
                     topic: Self.topic("connected"),
                     payload: .string("false", contentType: "application/json")
                 ),
-                sessionExpiry: .afterInterval(.hours(24))
+                sessionExpiry: .afterInterval(.hours(24)),
+                reconnectMode: .retry(minimumDelay: .seconds(1), maximumDelay: .seconds(3))
             ),
             eventLoopGroupProvider: .shared(application.eventLoopGroup),
             logger: application.logger

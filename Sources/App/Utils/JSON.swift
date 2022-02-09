@@ -4,7 +4,7 @@ enum JSON: Content, Equatable {
     case null
     case bool(Bool)
     case integer(Int)
-    case double(Double)
+    case double(Decimal)
     case string(String)
     case array([JSON])
     case dictionary([String: JSON])
@@ -29,7 +29,7 @@ enum JSON: Content, Equatable {
             self = .bool(bool)
         } else if let integer = container.decodeIfMatched(Int.self) {
             self = .integer(integer)
-        } else if let double = container.decodeIfMatched(Double.self) {
+        } else if let double = container.decodeIfMatched(Decimal.self) {
             self = .double(double)
         } else if let string = container.decodeIfMatched(String.self) {
             self = .string(string)
@@ -82,8 +82,8 @@ extension JSON: ExpressibleByIntegerLiteral {
 }
 
 extension JSON: ExpressibleByFloatLiteral {
-    init(floatLiteral value: Float) {
-        self = .double(Double(value))
+    init(floatLiteral value: Double) {
+        self = .double(Decimal(value))
     }
 }
 

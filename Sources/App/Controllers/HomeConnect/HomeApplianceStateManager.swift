@@ -195,6 +195,13 @@ actor HomeApplianceStateManager {
         state.appliance.isConnected = true
         states[applianceId] = state
         onUpdate(states, applianceId, .isConnected)
+        
+        try await fetch([
+            .status,
+            .settings,
+            .activeProgram,
+            .selectedProgram
+        ], forApplianceWithId: applianceId)
     }
     
     func disconnect(applianceWithId applianceId: HomeAppliance.ID) async throws {
@@ -254,7 +261,7 @@ actor HomeApplianceStateManager {
                 if item.value != nil {
                     result.fetchRequired.insert(.selectedProgram)
                 } else if state.activeProgram != nil {
-                    state.activeProgram = nil
+                    state.selectedProgram = nil
                     result.updated.insert(.selectedProgram)
                 }
             } else if uri.hasPrefix("\(urlPrefix)/programs/selected/options/") {

@@ -173,6 +173,11 @@ actor HomeApplianceStateManager {
                 .activeProgram,
                 .selectedProgram
             ], forApplianceWithId: appliance.id)
+        } else {
+            onUpdate(states, appliance.id, .status)
+            onUpdate(states, appliance.id, .settings)
+            onUpdate(states, appliance.id, .activeProgram)
+            onUpdate(states, appliance.id, .selectedProgram)
         }
     }
     
@@ -215,8 +220,17 @@ actor HomeApplianceStateManager {
         }
         
         state.appliance.isConnected = false
+        state.status = nil
+        state.settings = nil
+        state.activeProgram = nil
+        state.selectedProgram = nil
         states[applianceId] = state
+        
         onUpdate(states, applianceId, .isConnected)
+        onUpdate(states, applianceId, .status)
+        onUpdate(states, applianceId, .settings)
+        onUpdate(states, applianceId, .activeProgram)
+        onUpdate(states, applianceId, .selectedProgram)
     }
     
     func process(_ items: [HomeApplianceEvent.Item], forApplianceWithId applianceId: HomeAppliance.ID) async throws {

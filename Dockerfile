@@ -3,10 +3,10 @@
 # ================================
 
 #
-# docker buildx build --platform linux/amd64,linux/arm64 --push -t sroebert/home-connect-mqtt:latest .
+# docker buildx build --platform linux/arm64 --push -t sroebert/home-connect-mqtt:latest .
 #
 
-FROM swift:5.6.1-focal as build
+FROM swift:5.7.2 as build
 
 # Install OS updates and, if needed, sqlite3
 RUN apt-get update && apt-get install -y \
@@ -44,7 +44,7 @@ RUN [ -d /build/Resources ] && { mv /build/Resources ./Resources && chmod -R a-w
 # ================================
 # Run image
 # ================================
-FROM swift:5.6.1-focal-slim
+FROM swift:5.7.2-slim
 
 # Switch to the new home directory
 WORKDIR /app

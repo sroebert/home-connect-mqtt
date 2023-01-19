@@ -23,7 +23,6 @@ class HomeConnectProvider: LifecycleHandler {
     func didBoot(_ application: Application) throws {
         let manager = HomeConnectManager(
             application: application,
-            api: application.homeConnectAPI,
             mqttURL: mqttURL,
             mqttCredentials: mqttCredentials
         )

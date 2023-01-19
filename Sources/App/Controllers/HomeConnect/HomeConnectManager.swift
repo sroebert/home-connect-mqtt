@@ -52,7 +52,6 @@ actor HomeConnectManager {
     
     init(
         application: Application,
-        api: HomeConnectAPI,
         mqttURL: URL,
         mqttCredentials: MQTTConfiguration.Credentials?
     ) {

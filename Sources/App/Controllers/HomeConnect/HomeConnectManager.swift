@@ -42,6 +42,7 @@ actor HomeConnectManager {
     private let mqttJSONDecoder = JSONDecoder()
     
     private var runTask: Task<Void, Never>?
+    private var mqttConnectTask: Task<Void, Never>?
     private var mqttCommandTask: Task<Void, Never>?
     
     private static let monitoringTimeoutInterval: TimeAmount = .hours(2)
@@ -99,6 +100,9 @@ actor HomeConnectManager {
         monitorTask?.cancel()
         try? await monitorTask?.value
         
+        mqttConnectTask?.cancel()
+        await mqttConnectTask?.value
+        
         mqttCommandTask?.cancel()
         await mqttCommandTask?.value
         
@@ -112,6 +116,7 @@ actor HomeConnectManager {
         
         monitorTimeoutTask = nil
         monitorTask = nil
+        mqttConnectTask = nil
         mqttCommandTask = nil
         runTask = nil
     }
@@ -287,15 +292,17 @@ actor HomeConnectManager {
     // MARK: - MQTT
     
     private func setupMQTT(for manager: HomeApplianceStateManager) {
-        mqttClient.whenConnected { [weak self] response in
-            if !response.isSessionPresent {
-                Task { [self] in
-                    try await self?.mqttClient.subscribe(to: Topic.allCases.map(\.filter))
+        mqttConnectTask = Task {
+            for await response in mqttClient.connectPublisher.values {
+                if !response.isSessionPresent {
+                    Task {
+                        try await mqttClient.subscribe(to: Topic.allCases.map(\.filter))
+                    }
                 }
-            }
-            
-            Task { [self] in
-                try await self?.publishConnected()
+                
+                Task {
+                    try await publishConnected()
+                }
             }
         }
         

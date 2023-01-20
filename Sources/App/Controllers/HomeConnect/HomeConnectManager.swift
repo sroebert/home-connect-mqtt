@@ -61,6 +61,7 @@ actor HomeConnectManager {
         self.mqttClient = MQTTClient(
             configuration: MQTTConfiguration(
                 url: mqttURL,
+                for: application.eventLoopGroup,
                 clean: false,
                 credentials: mqttCredentials,
                 willMessage: .init(

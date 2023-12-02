@@ -187,7 +187,7 @@ struct HomeConnectAPI {
                     
                     let task = application.http.client.shared.execute(
                         request: request,
-                        delegate: EventSourceDelegate(timeout: .seconds(60)) { event in
+                        delegate: EventSourceDelegate(timeout: .seconds(70)) { event in
                             guard let homeApplianceEvent = event.homeApplianceEvent else {
                                 logParsingError(for: event)
                                 return

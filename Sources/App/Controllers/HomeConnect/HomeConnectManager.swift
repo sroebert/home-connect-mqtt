@@ -45,7 +45,7 @@ actor HomeConnectManager {
     private var mqttConnectCancellable: MQTTCancellable?
     private var mqttCommandTask: Task<Void, Never>?
     
-    private static let monitoringTimeoutInterval: TimeAmount = .hours(2)
+    private static let monitoringTimeoutInterval: TimeAmount = .hours(6)
     private var monitorTimeoutTask: Task<Void, Error>?
     private var monitorTask: Task<Void, Error>?
     
@@ -153,6 +153,7 @@ actor HomeConnectManager {
                 await manager.removeAllAppliances()
                 try await fetchAppliances(for: manager)
                 try await monitorEvents(for: manager)
+                print("Stopped monitoring")
             } catch {
                 application.logger.error("Failed to monitor events", metadata: [
                     "error": "\(error)"
@@ -188,7 +189,7 @@ actor HomeConnectManager {
         monitorTimeoutTask = Task {
             try await Task.sleep(for: Self.monitoringTimeoutInterval)
             
-            application.logger.info("No event for 2 hours, cancelling monitoring")
+            application.logger.info("No event for timeout interval, cancelling monitoring")
             monitorTask?.cancel()
         }
     }

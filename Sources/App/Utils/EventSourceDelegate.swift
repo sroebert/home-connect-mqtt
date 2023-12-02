@@ -21,6 +21,8 @@ final class EventSourceDelegate: HTTPClientResponseDelegate {
         case retry
     }
     
+    private struct TimeoutError: Error {}
+    
     // MARK: - Public Vars
     
     let timeout: TimeAmount?
@@ -127,7 +129,7 @@ final class EventSourceDelegate: HTTPClientResponseDelegate {
         
         timeoutTask?.cancel()
         timeoutTask = task.eventLoop.scheduleTask(in: timeout) {
-            task.cancel()
+            task.fail(reason: TimeoutError())
         }
     }
     
